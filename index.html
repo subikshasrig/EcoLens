@@ -1,0 +1,733 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Leaf, Search, RefreshCw, ShieldCheck, UploadCloud, 
+  FileText, Settings, Moon, Sun, User, Send, CheckCircle2, 
+  AlertTriangle, Check, ArrowRight, LayoutDashboard, 
+  FolderOpen, History, Library, Lightbulb, FileBarChart,
+  Loader2, Trash2, Link as LinkIcon, Presentation, BookOpen,
+  Network, TrendingUp, Download, ChevronDown, ChevronRight, Play,
+  Cpu, FileCode, Beaker, Globe
+} from 'lucide-react';
+
+const SAMPLE_DOCS = [
+  { id: '1', name: 'UAE_Dates_Processing_Report.pdf', size: '2.4 MB', type: 'pdf', content: 'Date Palm Biomass Residue (Phoenix dactylifera). Source: Al Ain agricultural sector. Physical Composition: Lignocellulosic fiber matrix comprising frond fibers (45%), discarded seed structures (35%). High carbon content makes it ideal for biochar. Nutrient profile suitable for livestock feed. Multiple high-value opportunities exist with moderate compliance requirements. Currently sent to agricultural landfills.' },
+  { id: '2', name: 'Tadweer_Sustainability_Report_2024.pdf', size: '5.1 MB', type: 'pdf', content: 'Tadweer 2024 Guidelines: Organic waste must be diverted from landfills by 80% by 2030. Bio-packaging is subsidized. Open-air incineration of agricultural waste is banned under UAE Cabinet Resolution No. 12.' },
+  { id: '3', name: 'Coffee_Grounds_Waste_Data.pdf', size: '1.2 MB', type: 'pdf', content: 'Spent Coffee Grounds (SCG). Source: Urban hospitality chains. Organic Carbon: 54.1%. High moisture (62%) triggers intense anaerobic decomposition. Can be used for biomass pellets or Chitosan-reinforced biodegradable polymers.' }
+];
+
+const OPPORTUNITIES = [
+  { title: 'Biochar Production', feasibility: 92, impact: 'High Impact', desc: 'High carbon content makes it ideal for biochar.', icon: Leaf, color: 'text-emerald-500' },
+  { title: 'Animal Feed Additive', feasibility: 84, impact: 'Medium Impact', desc: 'Nutrient profile suitable for livestock feed.', icon: Leaf, color: 'text-amber-500' },
+  { title: 'Biodegradable Packaging', feasibility: 88, impact: 'High Impact', desc: 'Fiber content suitable for bioplastic composites.', icon: Leaf, color: 'text-emerald-500' },
+  { title: 'Composting', feasibility: 76, impact: 'Medium Impact', desc: 'Can be converted into organic compost.', icon: Leaf, color: 'text-amber-500' }
+];
+
+export default function App() {
+  const [darkMode, setDarkMode] = useState(false);
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('ecolens_gemini_key') || '');
+  const [isConnected, setIsConnected] = useState(false);
+  
+  const [uploadedDocs, setUploadedDocs] = useState([SAMPLE_DOCS[0]]);
+  const [selectedDocIds, setSelectedDocIds] = useState([SAMPLE_DOCS[0].id]);
+  const [pipelineState, setPipelineState] = useState('idle'); 
+  const [progress, setProgress] = useState(0);
+  
+  // New State for Tabs
+  const [activeTab, setActiveTab] = useState('dashboard');
+
+  const [chatMessages, setChatMessages] = useState([
+    { role: 'assistant', text: "Hello! I'm your EcoLens Copilot. I've analyzed your uploaded documents. Ask me anything about circular economy opportunities, material composition, or compliance regulations." }
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const chatEndRef = useRef(null);
+
+  useEffect(() => {
+    if (darkMode) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+  }, [darkMode]);
+
+  useEffect(() => {
+    setIsConnected(apiKey.trim().length > 15);
+    localStorage.setItem('ecolens_gemini_key', apiKey);
+  }, [apiKey]);
+
+  useEffect(() => {
+    setSelectedDocIds(prev => {
+      const currentIds = uploadedDocs.map(d => d.id);
+      if (prev.length === 0 && currentIds.length > 0) return currentIds;
+      return prev.filter(id => currentIds.includes(id));
+    });
+  }, [uploadedDocs]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
+  const triggerAnalysis = () => {
+    setPipelineState('insight');
+    setProgress(15);
+    setTimeout(() => { setPipelineState('opportunity'); setProgress(50); }, 2000);
+    setTimeout(() => { setPipelineState('compliance'); setProgress(85); }, 4000);
+    setTimeout(() => { setPipelineState('done'); setProgress(100); }, 6000);
+  };
+
+  const handleFileUpload = (doc) => {
+    if (!uploadedDocs.find(d => d.id === doc.id)) {
+      setUploadedDocs([...uploadedDocs, doc]);
+      triggerAnalysis();
+    }
+  };
+
+  const handleSendMessage = async (e, forcedPrompt = null) => {
+    e?.preventDefault();
+    const textToSend = forcedPrompt || chatInput;
+    if (!textToSend.trim() || !isConnected) return;
+
+    setChatInput('');
+    setChatMessages(prev => [...prev, { role: 'user', text: textToSend }]);
+    setIsChatLoading(true);
+
+    try {
+      const activeDocs = uploadedDocs.filter(d => selectedDocIds.includes(d.id));
+      const contextText = activeDocs.length > 0 
+        ? activeDocs.map(d => `Document Name: ${d.name}\nContent: ${d.content}`).join('\n\n')
+        : "No specific documents selected. Please advise the user to select context documents for specific analysis.";
+        
+      const systemPrompt = `You are EcoLens Autonomous Agent, a proactive AI specializing in circular economy, sustainability, and environmental compliance. 
+      Selected Context Documents:\n${contextText}\n
+      Instructions:
+      1. Act as an analytical agent: Break down the user request, synthesize data from the explicitly selected documents, and provide actionable intelligence.
+      2. Cross-reference findings if multiple documents are selected.
+      3. Answer ONLY based on the selected document context.
+      4. Append a citation block at the end of extracted information: [Source: Document Name, Page X].`;
+
+      const payload = {
+        contents: [{ role: 'user', parts: [{ text: textToSend }] }],
+        systemInstruction: { parts: [{ text: systemPrompt }] }
+      };
+
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch response');
+      const data = await response.json();
+      const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (aiText) setChatMessages(prev => [...prev, { role: 'assistant', text: aiText }]);
+    } catch (error) {
+      setChatMessages(prev => [...prev, { role: 'assistant', text: `Error: ${error.message}. Please ensure your API key is valid.` }]);
+    } finally {
+      setIsChatLoading(false);
+    }
+  };
+
+  const toggleDocSelection = (id) => {
+    setSelectedDocIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const handleAgentAction = (actionType) => {
+    let prompt = "";
+    if (actionType === "summarize") prompt = "Agent Action: Summarize the key findings and strategic opportunities from the currently selected documents.";
+    else if (actionType === "cross_reference") prompt = "Agent Action: Cross-reference the selected documents. Identify synergies, conflicting information, or overlapping opportunities.";
+    else if (actionType === "compliance_check") prompt = "Agent Action: Review the selected documents exclusively for regulatory and compliance constraints. Highlight any risks.";
+    handleSendMessage(null, prompt);
+  };
+
+  const formatChatText = (text) => {
+    const parts = text.split(/(\[Source:.*?[\]])/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('[Source:')) {
+        return (
+          <span key={i} className="inline-flex items-center gap-1 text-[10px] bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded ml-1 mt-1 font-medium border border-emerald-200 dark:border-emerald-800">
+            <LinkIcon className="w-3 h-3" />
+            {part.replace('[Source: ', '').replace(']', '')}
+          </span>
+        );
+      }
+      return <span key={i}>{part}</span>;
+    });
+  };
+
+  return (
+    <div className={`flex h-screen overflow-hidden transition-colors duration-300 font-sans ${darkMode ? 'bg-slate-950 text-slate-100' : 'bg-[#F4F7F6] text-slate-900'}`}>
+      
+      {/* ================= SIDEBAR (Left) ================= */}
+      <aside className="w-64 bg-[#0A1914] text-slate-300 flex flex-col shadow-2xl z-20 flex-shrink-0">
+        <div className="p-6 flex items-center gap-3">
+          <div className="bg-emerald-500 p-1.5 rounded-lg text-white">
+            <Leaf className="w-6 h-6" />
+          </div>
+          <span className="text-2xl font-bold text-white tracking-tight">EcoLens</span>
+        </div>
+
+        <nav className="flex-1 px-4 py-2 space-y-1.5 overflow-y-auto custom-scrollbar">
+          <NavItem icon={LayoutDashboard} label="Dashboard" active />
+          <NavItem icon={FolderOpen} label="My Documents" />
+          <NavItem icon={History} label="Analysis History" />
+          <NavItem icon={Library} label="Compliance Library" />
+          <NavItem icon={Settings} label="Settings" />
+
+          {/* Upload Widget */}
+          <div className="mt-8 mb-6 bg-white/5 border border-white/10 rounded-xl p-4 text-center border-dashed">
+            <UploadCloud className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
+            <p className="text-xs font-semibold text-white mb-1">Upload Document</p>
+            <p className="text-[10px] text-slate-400 mb-3 px-2">Drag & drop PDF, DOCX here</p>
+            <button className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-2 px-4 rounded-lg w-full transition-colors">
+              Browse Files
+            </button>
+          </div>
+
+          <div>
+            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 px-2">Data Sources</h4>
+            <div className="space-y-1">
+              {SAMPLE_DOCS.map(doc => (
+                <button 
+                  key={doc.id} onClick={() => handleFileUpload(doc)}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors text-left"
+                >
+                  <FileText className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
+                  <span className="truncate">{doc.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </nav>
+      </aside>
+
+      {/* ================= MAIN CONTENT (Center) ================= */}
+      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto relative">
+        
+        {/* Top Header */}
+        <header className={`px-8 pt-6 pb-0 flex flex-col border-b ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} sticky top-0 z-20`}>
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h1 className={`text-xl font-bold flex items-center gap-2 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+                AI-Powered Research Copilot
+                <span className="text-[10px] uppercase bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400 px-2 py-0.5 rounded-full font-bold">V 2.0</span>
+              </h1>
+              <p className={`text-xs mt-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Advanced Circular Economy Synthesizer & Strategist</p>
+            </div>
+            
+            <div className="flex items-center gap-4">
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${darkMode ? 'bg-slate-950 border-slate-700' : 'bg-slate-50 border-slate-300'}`}>
+                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-rose-500'}`} />
+                <input 
+                  type="password" placeholder="Gemini API Key..." value={apiKey} onChange={(e) => setApiKey(e.target.value)}
+                  className="bg-transparent border-none outline-none text-xs w-24 focus:w-48 transition-all placeholder:text-slate-400"
+                />
+              </div>
+              <button onClick={() => setDarkMode(!darkMode)} className={`p-2 rounded-full transition-colors ${darkMode ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-100 text-slate-600'}`}>
+                {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              </button>
+              <div className="flex items-center gap-2 cursor-pointer">
+                <div className="w-8 h-8 rounded-full bg-slate-300 overflow-hidden border-2 border-emerald-500">
+                  <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" className="w-full h-full object-cover" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {}
+          <div className="flex space-x-1 overflow-x-auto custom-scrollbar pb-[-1px]">
+            <TabButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={LayoutDashboard} label="AI Pipeline" darkMode={darkMode} />
+            <TabButton active={activeTab === 'concept'} onClick={() => setActiveTab('concept')} icon={BookOpen} label="Concept Explorer" darkMode={darkMode} />
+            <TabButton active={activeTab === 'map'} onClick={() => setActiveTab('map')} icon={Network} label="Knowledge Map" darkMode={darkMode} />
+            <TabButton active={activeTab === 'policy'} onClick={() => setActiveTab('policy')} icon={TrendingUp} label="Policy Impact" darkMode={darkMode} />
+            <TabButton active={activeTab === 'brief'} onClick={() => setActiveTab('brief')} icon={FileText} label="Research Brief" darkMode={darkMode} />
+            <TabButton active={activeTab === 'slides'} onClick={() => setActiveTab('slides')} icon={Presentation} label="Slide Deck" darkMode={darkMode} />
+          </div>
+        </header>
+
+        {/* Dynamic Content Area based on Tab */}
+        <div className="p-8 flex flex-col gap-6 max-w-6xl mx-auto w-full">
+          {activeTab === 'dashboard' && <DashboardView uploadedDocs={uploadedDocs} pipelineState={pipelineState} progress={progress} darkMode={darkMode} setUploadedDocs={setUploadedDocs} />}
+          {activeTab === 'concept' && <ConceptExplorerView darkMode={darkMode} />}
+          {activeTab === 'map' && <KnowledgeMapView darkMode={darkMode} />}
+          {activeTab === 'policy' && <PolicyImpactView darkMode={darkMode} />}
+          {activeTab === 'brief' && <ResearchBriefView darkMode={darkMode} />}
+          {activeTab === 'slides' && <SlideDeckView darkMode={darkMode} />}
+        </div>
+      </main>
+
+      {/* ================= RIGHT PANEL (Chatbot) ================= */}
+      <aside className={`w-[360px] flex flex-col border-l flex-shrink-0 z-10 shadow-[-10px_0_15px_-3px_rgba(0,0,0,0.05)] ${darkMode ? 'bg-[#0F172A] border-slate-800' : 'bg-white border-slate-200'}`}>
+        <div className="flex-1 flex flex-col min-h-0 bg-slate-50 dark:bg-slate-900/50">
+          <div className={`p-4 border-b flex justify-between items-center bg-white dark:bg-[#0F172A] ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+            <div>
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                EcoLens Chat
+                <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-transparent bg-clip-text text-[10px] font-black uppercase tracking-wider">Gemini 2.5 Flash</span>
+              </h3>
+              <p className="text-[10px] text-slate-500">Ask about uploaded documents</p>
+            </div>
+            <div className="flex items-center gap-1.5 text-[10px] font-bold">
+              {isConnected ? (
+                <span className="text-emerald-500 flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"/> Ready</span>
+              ) : (
+                <span className="text-red-500 flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> Missing Key</span>
+              )}
+            </div>
+          </div>
+
+          {}
+          <div className={`p-3 border-b flex flex-col gap-2 ${darkMode ? 'border-slate-800 bg-slate-900/80' : 'border-slate-200 bg-slate-100/50'}`}>
+            <div className="flex justify-between items-center">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                <Cpu className="w-3 h-3"/> Agent Context
+              </span>
+              <span className="text-[10px] text-slate-400">{selectedDocIds.length}/{uploadedDocs.length} Selected</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {uploadedDocs.map(doc => (
+                <button
+                  key={doc.id}
+                  onClick={() => toggleDocSelection(doc.id)}
+                  className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-md border transition-all ${selectedDocIds.includes(doc.id) ? 'bg-emerald-100 border-emerald-300 text-emerald-700 shadow-sm dark:bg-emerald-900/40 dark:border-emerald-700 dark:text-emerald-300' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-700'}`}
+                >
+                  <div className={`w-1.5 h-1.5 rounded-full ${selectedDocIds.includes(doc.id) ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
+                  {doc.name.substring(0, 18)}...
+                </button>
+              ))}
+              {uploadedDocs.length === 0 && <span className="text-xs text-slate-400 italic">No documents uploaded</span>}
+            </div>
+            
+            {/* Agent Actions */}
+            {selectedDocIds.length > 0 && (
+               <div className="flex gap-2 mt-1">
+                 <button onClick={() => handleAgentAction('summarize')} className="flex-1 text-[10px] py-1.5 bg-white border border-slate-200 hover:border-emerald-300 hover:text-emerald-600 text-slate-600 dark:bg-slate-950 dark:border-slate-700 dark:hover:border-emerald-500/50 dark:text-slate-300 rounded shadow-sm transition-all flex items-center justify-center gap-1">
+                   <FileText className="w-3 h-3"/> Summarize
+                 </button>
+                 <button onClick={() => handleAgentAction('cross_reference')} disabled={selectedDocIds.length < 2} className="flex-1 text-[10px] py-1.5 bg-white border border-slate-200 hover:border-emerald-300 hover:text-emerald-600 text-slate-600 dark:bg-slate-950 dark:border-slate-700 dark:hover:border-emerald-500/50 dark:text-slate-300 rounded shadow-sm transition-all flex items-center justify-center gap-1 disabled:opacity-50 disabled:hover:border-slate-200 disabled:hover:text-slate-600 dark:disabled:hover:border-slate-700 dark:disabled:hover:text-slate-300">
+                   <Network className="w-3 h-3"/> Cross-Ref
+                 </button>
+               </div>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+            {chatMessages.map((msg, idx) => (
+              <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[85%] rounded-2xl p-3 text-sm leading-relaxed ${
+                  msg.role === 'user' 
+                    ? 'bg-emerald-600 text-white rounded-tr-sm' 
+                    : darkMode ? 'bg-slate-800 text-slate-200 rounded-tl-sm' : 'bg-white border border-slate-200 shadow-sm rounded-tl-sm text-slate-700'
+                }`}>
+                  {msg.role === 'assistant' ? formatChatText(msg.text) : msg.text}
+                </div>
+              </div>
+            ))}
+            {isChatLoading && (
+              <div className="flex justify-start">
+                <div className={`max-w-[80%] rounded-2xl p-3 rounded-tl-sm flex items-center gap-2 ${darkMode ? 'bg-slate-800' : 'bg-white border border-slate-200'}`}>
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+
+          <div className={`p-4 border-t bg-white dark:bg-[#0F172A] ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+            <form onSubmit={handleSendMessage} className={`flex items-center gap-2 p-1.5 rounded-xl border transition-colors ${darkMode ? 'bg-slate-900 border-slate-700 focus-within:border-emerald-500' : 'bg-slate-50 border-slate-300 focus-within:border-emerald-500 focus-within:bg-white'}`}>
+              <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={isConnected ? "Ask EcoLens..." : "Enter API key to chat"} disabled={!isConnected || isChatLoading} className="flex-1 bg-transparent border-none outline-none text-sm px-3 text-slate-800 dark:text-white placeholder:text-slate-400 disabled:opacity-50" />
+              <button type="submit" disabled={!chatInput.trim() || !isConnected || isChatLoading} className="p-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-300 dark:disabled:bg-slate-800 text-white transition-colors">
+                <Send className="w-4 h-4" />
+              </button>
+            </form>
+          </div>
+        </div>
+      </aside>
+
+      <style dangerouslySetInnerHTML={{__html: `
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; }
+        
+        @keyframes pulse-node {
+          0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+          70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        .animate-pulse-node { animation: pulse-node 2s infinite; }
+      `}} />
+    </div>
+  );
+}
+
+// ================= NEW TAB COMPONENTS =================
+
+function ConceptExplorerView({ darkMode }) {
+  const concepts = [
+    { name: "Lignocellulosic Fiber", doc: "UAE_Dates_Processing_Report.pdf", desc: "A complex matrix of plant cellular material (cellulose, hemicellulose, and lignin) found in date palm fronds. Excellent structural precursor for bio-composites.", tags: ["Biomaterial", "Structural"] },
+    { name: "Anaerobic Decomposition", doc: "Coffee_Grounds_Waste_Data.pdf", desc: "The breakdown of high-moisture organic matter (like spent coffee grounds) by microorganisms in the absence of oxygen, leading to methane emissions if unmanaged.", tags: ["Risk", "Chemistry"] },
+    { name: "Bio-packaging Subsidies", doc: "Tadweer_Sustainability_Report_2024.pdf", desc: "Government financial incentives designed to offset the higher production costs of biodegradable packaging, making it competitive with single-use plastics.", tags: ["Policy", "Financial"] }
+  ];
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className={`p-6 rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+        <h2 className="text-lg font-bold flex items-center gap-2 mb-2"><BookOpen className="w-5 h-5 text-emerald-500"/> Concept Explorer</h2>
+        <p className={`text-xs mb-6 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>An AI-generated Wikipedia extracted directly from your uploaded documents.</p>
+        
+        <div className="space-y-3">
+          {concepts.map((concept, i) => (
+            <details key={i} className={`group border rounded-xl overflow-hidden transition-all ${darkMode ? 'bg-slate-950 border-slate-800 open:border-emerald-500/50' : 'bg-slate-50 border-slate-200 open:border-emerald-300'}`}>
+              <summary className={`flex items-center justify-between p-4 cursor-pointer font-semibold text-sm transition-colors ${darkMode ? 'text-slate-200 hover:bg-slate-900' : 'text-slate-800 hover:bg-slate-100'}`}>
+                <div className="flex items-center gap-3">
+                  <ChevronRight className="w-4 h-4 transition-transform group-open:rotate-90 text-emerald-500" />
+                  {concept.name}
+                </div>
+                <div className="flex gap-2">
+                  {concept.tags.map(tag => (
+                    <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400">{tag}</span>
+                  ))}
+                </div>
+              </summary>
+              <div className={`p-4 pt-0 text-sm border-t ${darkMode ? 'border-slate-800 text-slate-300' : 'border-slate-200 text-slate-600'}`}>
+                <p className="mt-4">{concept.desc}</p>
+                <div className="mt-4 flex items-center gap-1.5 text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-1.5 rounded w-fit border border-emerald-100 dark:border-emerald-900/50">
+                  <LinkIcon className="w-3 h-3" /> Source: {concept.doc}
+                </div>
+              </div>
+            </details>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KnowledgeMapView({ darkMode }) {
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col">
+      <div className={`p-6 rounded-xl border flex-1 flex flex-col ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+        <h2 className="text-lg font-bold flex items-center gap-2 mb-2"><Network className="w-5 h-5 text-emerald-500"/> Knowledge Map</h2>
+        <p className={`text-xs mb-6 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Visual representation of interconnected materials, processes, and applications.</p>
+        
+        <div className={`relative flex-1 rounded-lg border overflow-hidden bg-slate-50 dark:bg-slate-950 flex items-center justify-center min-h-[400px] ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+          {/* Simulated Network Graph via SVG */}
+          <svg className="absolute inset-0 w-full h-full" style={{ minWidth: '600px' }}>
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill={darkMode ? '#475569' : '#94a3b8'} />
+              </marker>
+            </defs>
+            {/* Edges */}
+            <path d="M 200 150 C 350 150, 300 250, 450 250" fill="none" stroke={darkMode ? '#475569' : '#94a3b8'} strokeWidth="2" strokeDasharray="5,5" markerEnd="url(#arrow)" />
+            <path d="M 200 350 C 350 350, 300 250, 450 250" fill="none" stroke={darkMode ? '#475569' : '#94a3b8'} strokeWidth="2" strokeDasharray="5,5" markerEnd="url(#arrow)" />
+            <path d="M 450 250 C 600 250, 600 150, 750 150" fill="none" stroke={darkMode ? '#475569' : '#94a3b8'} strokeWidth="2" markerEnd="url(#arrow)" />
+            <path d="M 450 250 C 600 250, 600 350, 750 350" fill="none" stroke={darkMode ? '#475569' : '#94a3b8'} strokeWidth="2" markerEnd="url(#arrow)" />
+          </svg>
+          
+          {/* Nodes */}
+          <NetworkNode x="10%" y="25%" title="Date Biomass" type="input" darkMode={darkMode} />
+          <NetworkNode x="10%" y="65%" title="Coffee Grounds" type="input" darkMode={darkMode} />
+          
+          <NetworkNode x="45%" y="45%" title="Thermal Pyrolysis" type="process" darkMode={darkMode} pulse />
+          
+          <NetworkNode x="75%" y="25%" title="Agricultural Biochar" type="output" darkMode={darkMode} />
+          <NetworkNode x="75%" y="65%" title="Bioplastic Resins" type="output" darkMode={darkMode} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NetworkNode({ x, y, title, type, darkMode, pulse }) {
+  const colors = {
+    input: darkMode ? 'bg-amber-900/50 border-amber-500/50 text-amber-200' : 'bg-amber-100 border-amber-300 text-amber-800',
+    process: darkMode ? 'bg-emerald-900/50 border-emerald-500 text-emerald-200' : 'bg-emerald-100 border-emerald-500 text-emerald-800',
+    output: darkMode ? 'bg-blue-900/50 border-blue-500/50 text-blue-200' : 'bg-blue-100 border-blue-300 text-blue-800',
+  };
+  return (
+    <div className={`absolute transform -translate-x-1/2 -translate-y-1/2 px-4 py-2 rounded-lg border-2 text-xs font-bold shadow-lg backdrop-blur-sm z-10 ${colors[type]} ${pulse ? 'animate-pulse-node' : ''}`} style={{ left: x, top: y }}>
+      {title}
+    </div>
+  );
+}
+
+function PolicyImpactView({ darkMode }) {
+  const [selectedScenario, setSelectedScenario] = useState(1);
+
+  const scenarios = [
+    { id: 1, title: "Ban on Open Incineration", icon: Beaker },
+    { id: 2, title: "Organic Waste Landfill Tax", icon: TrendingUp },
+    { id: 3, title: "Subsidies for Bio-Packaging", icon: Globe }
+  ];
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className={`p-6 rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+        <h2 className="text-lg font-bold flex items-center gap-2 mb-2"><TrendingUp className="w-5 h-5 text-emerald-500"/> Policy Impact Generator</h2>
+        <p className={`text-xs mb-6 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Simulate regulatory changes to see operational and financial cascading effects.</p>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="space-y-3">
+            <h3 className={`text-xs font-bold uppercase ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Select Scenario</h3>
+            {scenarios.map(s => (
+              <button key={s.id} onClick={() => setSelectedScenario(s.id)} className={`w-full flex items-center gap-3 p-3 rounded-lg border text-sm font-medium transition-all text-left ${selectedScenario === s.id ? 'bg-emerald-500 text-white border-emerald-500 shadow-md' : darkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-600' : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'}`}>
+                <s.icon className="w-4 h-4" /> {s.title}
+              </button>
+            ))}
+          </div>
+
+          <div className="col-span-2">
+            <h3 className={`text-xs font-bold uppercase mb-3 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Predicted Impact Chain</h3>
+            <div className={`p-5 rounded-xl border relative overflow-hidden ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+              <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500" />
+              {selectedScenario === 1 && (
+                <div className="space-y-4 animate-in fade-in">
+                  <ImpactRow time="Immediate (0-6 mo)" desc="Farms holding date palm waste face stockpiling issues. Urgent need for collection logistics." type="risk" darkMode={darkMode}/>
+                  <ImpactRow time="Mid-term (1-2 yrs)" desc="Rise in decentralized thermal pyrolysis units (Biochar production) at farm level to manage volume." type="opportunity" darkMode={darkMode}/>
+                  <ImpactRow time="Long-term (3+ yrs)" desc="Establishment of a robust secondary market for agricultural carbon credits." type="positive" darkMode={darkMode}/>
+                </div>
+              )}
+              {selectedScenario !== 1 && (
+                <div className="h-40 flex items-center justify-center flex-col gap-2 text-slate-400">
+                  <Cpu className="w-8 h-8 opacity-50" />
+                  <span className="text-xs">Generating simulations...</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImpactRow({ time, desc, type, darkMode }) {
+  const colors = {
+    risk: 'text-amber-500 bg-amber-500/10 border-amber-500/20',
+    opportunity: 'text-blue-500 bg-blue-500/10 border-blue-500/20',
+    positive: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20'
+  };
+  return (
+    <div className={`p-3 rounded-lg border text-sm flex flex-col gap-1 ${colors[type]}`}>
+      <span className="text-[10px] font-bold uppercase opacity-80">{time}</span>
+      <span className={darkMode ? 'text-slate-300' : 'text-slate-700'}>{desc}</span>
+    </div>
+  );
+}
+
+function ResearchBriefView({ darkMode }) {
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className={`p-8 rounded-xl border max-w-3xl mx-auto shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+        <div className="flex justify-between items-start mb-8 border-b pb-4 dark:border-slate-800 border-slate-200">
+          <div>
+            <h1 className={`text-2xl font-serif font-bold ${darkMode ? 'text-slate-100' : 'text-slate-900'}`}>AI Research Brief: Biomass Circularity</h1>
+            <p className="text-sm text-emerald-600 dark:text-emerald-400 mt-1">Generated by EcoLens Copilot</p>
+          </div>
+          <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition-colors">
+            <Download className="w-4 h-4"/> Export PDF
+          </button>
+        </div>
+
+        <div className={`space-y-6 text-sm leading-relaxed ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+          <section>
+            <h3 className={`font-bold text-base mb-2 ${darkMode ? 'text-white' : 'text-black'}`}>Executive Summary</h3>
+            <p>Analysis of the uploaded agricultural and urban waste datasets indicates a high potential for secondary material recovery. Specifically, Lignocellulosic fiber from date palms and high-carbon spent coffee grounds present viable pathways for commercial upcycling, diverting 80% of current volume from landfills.</p>
+          </section>
+          
+          <section>
+            <h3 className={`font-bold text-base mb-2 ${darkMode ? 'text-white' : 'text-black'}`}>Key Findings</h3>
+            <ul className="list-disc pl-5 space-y-1">
+              <li><strong>Volume & Composition:</strong> Date seeds comprise 35% of processing waste, offering high carbon density suitable for pyrolysis.</li>
+              <li><strong>Regulatory Tailwind:</strong> UAE Cabinet Resolution No. 12 banning open incineration creates an immediate need for alternative processing.</li>
+              <li><strong>Financial Viability:</strong> Subsidies for bio-packaging significantly reduce the capex risk for establishing Chitosan-reinforced polymer plants.</li>
+            </ul>
+          </section>
+
+          <div className="bg-emerald-50 dark:bg-emerald-950/30 p-4 rounded-lg border border-emerald-100 dark:border-emerald-900/50 flex items-start gap-3">
+             <AlertTriangle className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
+             <p className="text-xs"><strong>Compliance Note:</strong> Transporting agricultural waste across municipal zones requires localized phytosanitary permits not currently detailed in the main Tadweer 2024 guidelines.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SlideDeckView({ darkMode }) {
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExport = () => {
+    setIsExporting(true);
+    setTimeout(() => setIsExporting(false), 2000);
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className={`p-6 rounded-xl border flex justify-between items-center ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+        <div>
+          <h2 className="text-lg font-bold flex items-center gap-2"><Presentation className="w-5 h-5 text-emerald-500"/> Slide Deck Generator</h2>
+          <p className={`text-xs mt-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>AI-formatted presentation ready for executive review.</p>
+        </div>
+        <button onClick={handleExport} disabled={isExporting} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white text-sm font-bold transition-colors">
+          {isExporting ? <Loader2 className="w-4 h-4 animate-spin"/> : <Download className="w-4 h-4"/>}
+          {isExporting ? 'Generating PDF...' : 'Export Deck'}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <SlideCard title="1. Circular Opportunity" content="Transforming Date Palm & Coffee Waste into high-value commercial assets." footer="EcoLens Synthesis" darkMode={darkMode} />
+        <SlideCard title="2. Material Composition" content="Date Fronds: 45% Fiber, 35% Seed. Coffee Grounds: 54% Organic Carbon." footer="Data Analysis" darkMode={darkMode} />
+        <SlideCard title="3. Policy Environment" content="Resolution 12 prohibits incineration. 80% diversion mandate by 2030." footer="Compliance Review" darkMode={darkMode} />
+        <SlideCard title="4. Proposed Architecture" content="Distributed pyrolysis networks linked to central bio-resin compounding facilities." footer="Strategic Roadmap" darkMode={darkMode} />
+      </div>
+    </div>
+  );
+}
+
+function SlideCard({ title, content, footer, darkMode }) {
+  return (
+    <div className={`aspect-video rounded-lg border shadow-sm p-5 flex flex-col justify-between transition-transform hover:scale-[1.02] ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+      <h3 className={`text-sm font-bold border-b pb-2 ${darkMode ? 'text-emerald-400 border-slate-800' : 'text-emerald-700 border-slate-200'}`}>{title}</h3>
+      <p className={`text-sm flex-1 mt-4 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>{content}</p>
+      <div className={`text-[10px] font-medium uppercase tracking-wider ${darkMode ? 'text-slate-600' : 'text-slate-400'}`}>{footer}</div>
+    </div>
+  );
+}
+
+function DashboardView({ uploadedDocs, pipelineState, progress, darkMode, setUploadedDocs }) {
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {uploadedDocs.length > 0 && (
+        <div className={`flex flex-wrap gap-3 p-4 rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+          <span className={`text-xs font-bold w-full mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>ACTIVE DOCUMENTS IN PIPELINE</span>
+          {uploadedDocs.map(doc => (
+            <div key={doc.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-emerald-50 text-emerald-800 border-emerald-100'}`}>
+              <FileText className="w-3.5 h-3.5 text-emerald-500" />
+              {doc.name}
+              <button onClick={() => setUploadedDocs(uploadedDocs.filter(d => d.id !== doc.id))} className="ml-2 opacity-50 hover:opacity-100 text-red-500">
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <section className={`p-6 rounded-2xl border shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+        <div className="flex justify-between items-center mb-8">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-bold flex items-center gap-2"><Leaf className="w-5 h-5 text-emerald-500" /> AI Analysis Pipeline</h2>
+            <span className="text-[10px] uppercase font-bold bg-emerald-500 text-white px-2 py-0.5 rounded-full">Live</span>
+          </div>
+          <div className="text-xs font-medium text-slate-400 flex items-center gap-2">
+            {pipelineState === 'done' ? 'Analysis Complete' : pipelineState !== 'idle' ? <><Loader2 className="w-3.5 h-3.5 animate-spin"/> Processing...</> : 'Awaiting Input'}
+          </div>
+        </div>
+
+        <div className="relative flex justify-between items-center px-12 mb-10">
+          <div className="absolute top-1/2 left-16 right-16 h-0.5 bg-slate-200 dark:bg-slate-800 -z-0 -translate-y-1/2" />
+          <div className="absolute top-1/2 left-16 right-16 h-0.5 bg-emerald-500 -z-0 -translate-y-1/2 transition-all duration-1000 ease-out" style={{ width: `${progress}%`, maxWidth: 'calc(100% - 8rem)' }} />
+          <PipelineNode icon={Search} title="Insight Lens" desc="Material Analysis" status={pipelineState === 'idle' ? 'idle' : 'done'} darkMode={darkMode} />
+          <PipelineNode icon={RefreshCw} title="Opportunity Lens" desc="Circular Mapping" status={pipelineState === 'idle' || pipelineState === 'insight' ? (pipelineState === 'insight' ? 'active' : 'idle') : 'done'} darkMode={darkMode} />
+          <PipelineNode icon={ShieldCheck} title="Compliance Lens" desc="Regulatory Audit" status={pipelineState === 'done' ? 'done' : pipelineState === 'compliance' ? 'active' : 'idle'} darkMode={darkMode} />
+        </div>
+
+        <div className="space-y-3">
+          <StepDetail title="Insight Lens" desc="Extracted key materials, composition, and environmental insights." status={pipelineState === 'idle' ? 'Waiting' : 'Completed'} icon={Search} darkMode={darkMode} />
+          <StepDetail title="Opportunity Lens" desc="Identifying circular economy opportunities and value pathways." status={pipelineState === 'idle' || pipelineState === 'insight' ? 'Waiting' : pipelineState === 'opportunity' ? 'In Progress' : 'Completed'} icon={RefreshCw} darkMode={darkMode} />
+          <StepDetail title="Compliance Lens" desc="Checking regulatory compliance and environmental standards." status={pipelineState === 'done' ? 'Completed' : pipelineState === 'compliance' ? 'In Progress' : 'Pending'} icon={ShieldCheck} darkMode={darkMode} />
+        </div>
+
+        <div className="mt-6 flex items-center gap-4 text-xs font-semibold">
+          <span>Overall Progress</span>
+          <div className="flex-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+            <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${progress}%` }} />
+          </div>
+          <span className="text-emerald-500">{progress}%</span>
+        </div>
+      </section>
+
+      <section>
+        <h3 className={`text-sm font-bold mb-4 ${darkMode ? 'text-white' : 'text-slate-800'}`}>AI Generated Opportunities (Preview)</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {OPPORTUNITIES.map((opp, idx) => (
+            <div key={idx} className={`p-4 rounded-xl border shadow-sm flex flex-col h-full ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+              <div className="flex items-start gap-2 mb-2">
+                <opp.icon className={`w-4 h-4 mt-0.5 ${opp.color}`} />
+                <h4 className="font-bold text-sm leading-tight">{opp.title}</h4>
+              </div>
+              <div className="text-xs font-semibold text-slate-500 mb-2">Feasibility: {opp.feasibility}%</div>
+              <p className={`text-xs mb-4 flex-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{opp.desc}</p>
+              <span className={`text-[10px] font-bold px-2 py-1 rounded w-fit ${opp.impact === 'High Impact' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
+                {opp.impact}
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+// --- HELPER COMPONENTS ---
+
+function TabButton({ active, onClick, icon: Icon, label, darkMode }) {
+  return (
+    <button onClick={onClick} className={`flex items-center gap-2 px-4 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${
+      active 
+        ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400' 
+        : `border-transparent hover:border-slate-300 ${darkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-800'}`
+    }`}>
+      <Icon className="w-4 h-4" /> {label}
+    </button>
+  );
+}
+
+function NavItem({ icon: Icon, label, active }) {
+  return (
+    <button className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${active ? 'bg-emerald-500 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+      <Icon className="w-5 h-5" /> {label}
+    </button>
+  );
+}
+
+function PipelineNode({ icon: Icon, title, desc, status, darkMode }) {
+  const getStyles = () => {
+    if (status === 'done') return 'bg-emerald-500 text-white border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)] scale-110';
+    if (status === 'active') return 'bg-white dark:bg-slate-800 border-emerald-500 text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)] scale-110 ring-4 ring-emerald-500/20';
+    return `bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`;
+  };
+  return (
+    <div className="flex flex-col items-center z-10 relative bg-white dark:bg-slate-900 px-2">
+      <div className={`w-14 h-14 rounded-full border-2 flex items-center justify-center transition-all duration-500 ${getStyles()}`}>
+        <Icon className="w-6 h-6" />
+      </div>
+      <span className={`mt-3 text-xs font-bold ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>{title}</span>
+      <span className="text-[10px] text-slate-500">{desc}</span>
+    </div>
+  );
+}
+
+function StepDetail({ title, desc, status, icon: Icon, darkMode }) {
+  const getStatusColor = () => {
+    if (status === 'Completed') return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400';
+    if (status === 'In Progress') return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400';
+    return 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400';
+  };
+  return (
+    <div className={`flex items-center justify-between p-4 rounded-xl border ${darkMode ? 'bg-slate-950/50 border-slate-800/60' : 'bg-slate-50 border-slate-200'}`}>
+      <div className="flex items-start gap-3">
+        <div className={`p-2 rounded-full ${status === 'Completed' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-slate-200 text-slate-400 dark:bg-slate-800'}`}>
+          <Icon className="w-4 h-4" />
+        </div>
+        <div>
+          <div className="flex items-center gap-2">
+            <h4 className={`text-sm font-bold ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>{title}</h4>
+            <span className={`text-[9px] font-bold px-2 py-0.5 rounded ${getStatusColor()}`}>{status}</span>
+          </div>
+          <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
