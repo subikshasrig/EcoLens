@@ -1,732 +1,952 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Leaf, Search, RefreshCw, ShieldCheck, UploadCloud, 
-  FileText, Settings, Moon, Sun, User, Send, CheckCircle2, 
-  AlertTriangle, Check, ArrowRight, LayoutDashboard, 
-  FolderOpen, History, Library, Lightbulb, FileBarChart,
-  Loader2, Trash2, Link as LinkIcon, Presentation, BookOpen,
-  Network, TrendingUp, Download, ChevronDown, ChevronRight, Play,
-  Cpu, FileCode, Beaker, Globe
+  Upload, FileText, CheckCircle, AlertTriangle, Info, MessageSquare, 
+  Settings, Search, Sun, Moon, Link as LinkIcon, Download, Zap, 
+  BarChart, Layers, FileOutput, Network, Plus, Trash2, Key, Loader2, Play
 } from 'lucide-react';
 
-const SAMPLE_DOCS = [
-  { id: '1', name: 'UAE_Dates_Processing_Report.pdf', size: '2.4 MB', type: 'pdf', content: 'Date Palm Biomass Residue (Phoenix dactylifera). Source: Al Ain agricultural sector. Physical Composition: Lignocellulosic fiber matrix comprising frond fibers (45%), discarded seed structures (35%). High carbon content makes it ideal for biochar. Nutrient profile suitable for livestock feed. Multiple high-value opportunities exist with moderate compliance requirements. Currently sent to agricultural landfills.' },
-  { id: '2', name: 'Tadweer_Sustainability_Report_2024.pdf', size: '5.1 MB', type: 'pdf', content: 'Tadweer 2024 Guidelines: Organic waste must be diverted from landfills by 80% by 2030. Bio-packaging is subsidized. Open-air incineration of agricultural waste is banned under UAE Cabinet Resolution No. 12.' },
-  { id: '3', name: 'Coffee_Grounds_Waste_Data.pdf', size: '1.2 MB', type: 'pdf', content: 'Spent Coffee Grounds (SCG). Source: Urban hospitality chains. Organic Carbon: 54.1%. High moisture (62%) triggers intense anaerobic decomposition. Can be used for biomass pellets or Chitosan-reinforced biodegradable polymers.' }
-];
+// --- Utilities & API Helpers ---
 
-const OPPORTUNITIES = [
-  { title: 'Biochar Production', feasibility: 92, impact: 'High Impact', desc: 'High carbon content makes it ideal for biochar.', icon: Leaf, color: 'text-emerald-500' },
-  { title: 'Animal Feed Additive', feasibility: 84, impact: 'Medium Impact', desc: 'Nutrient profile suitable for livestock feed.', icon: Leaf, color: 'text-amber-500' },
-  { title: 'Biodegradable Packaging', feasibility: 88, impact: 'High Impact', desc: 'Fiber content suitable for bioplastic composites.', icon: Leaf, color: 'text-emerald-500' },
-  { title: 'Composting', feasibility: 76, impact: 'Medium Impact', desc: 'Can be converted into organic compost.', icon: Leaf, color: 'text-amber-500' }
-];
+const parseGeminiJSON = (text) => {
+  try {
+    let cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleanText);
+  } catch (e) {
+    console.error("Failed to parse JSON from Gemini:", text);
+    return null;
+  }
+};
 
-export default function App() {
-  const [darkMode, setDarkMode] = useState(false);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('ecolens_gemini_key') || '');
-  const [isConnected, setIsConnected] = useState(false);
+const fetchGemini = async (prompt, apiKey, isJson = false, systemInstruction = "") => {
+  if (!apiKey) throw new Error("API Key required");
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
   
-  const [uploadedDocs, setUploadedDocs] = useState([SAMPLE_DOCS[0]]);
-  const [selectedDocIds, setSelectedDocIds] = useState([SAMPLE_DOCS[0].id]);
-  const [pipelineState, setPipelineState] = useState('idle'); 
-  const [progress, setProgress] = useState(0);
-  
-  // New State for Tabs
-  const [activeTab, setActiveTab] = useState('dashboard');
-
-  const [chatMessages, setChatMessages] = useState([
-    { role: 'assistant', text: "Hello! I'm your EcoLens Copilot. I've analyzed your uploaded documents. Ask me anything about circular economy opportunities, material composition, or compliance regulations." }
-  ]);
-  const [chatInput, setChatInput] = useState('');
-  const [isChatLoading, setIsChatLoading] = useState(false);
-  const chatEndRef = useRef(null);
-
-  useEffect(() => {
-    if (darkMode) document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
-  }, [darkMode]);
-
-  useEffect(() => {
-    setIsConnected(apiKey.trim().length > 15);
-    localStorage.setItem('ecolens_gemini_key', apiKey);
-  }, [apiKey]);
-
-  useEffect(() => {
-    setSelectedDocIds(prev => {
-      const currentIds = uploadedDocs.map(d => d.id);
-      if (prev.length === 0 && currentIds.length > 0) return currentIds;
-      return prev.filter(id => currentIds.includes(id));
-    });
-  }, [uploadedDocs]);
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages]);
-
-  const triggerAnalysis = () => {
-    setPipelineState('insight');
-    setProgress(15);
-    setTimeout(() => { setPipelineState('opportunity'); setProgress(50); }, 2000);
-    setTimeout(() => { setPipelineState('compliance'); setProgress(85); }, 4000);
-    setTimeout(() => { setPipelineState('done'); setProgress(100); }, 6000);
+  const payload = {
+    contents: [{ parts: [{ text: prompt }] }],
   };
 
-  const handleFileUpload = (doc) => {
-    if (!uploadedDocs.find(d => d.id === doc.id)) {
-      setUploadedDocs([...uploadedDocs, doc]);
-      triggerAnalysis();
-    }
-  };
+  if (systemInstruction) {
+    payload.systemInstruction = { parts: [{ text: systemInstruction }] };
+  }
 
-  const handleSendMessage = async (e, forcedPrompt = null) => {
-    e?.preventDefault();
-    const textToSend = forcedPrompt || chatInput;
-    if (!textToSend.trim() || !isConnected) return;
+  if (isJson) {
+    payload.generationConfig = { responseMimeType: "application/json" };
+  }
 
-    setChatInput('');
-    setChatMessages(prev => [...prev, { role: 'user', text: textToSend }]);
-    setIsChatLoading(true);
-
+  // Basic exponential backoff
+  const maxRetries = 3;
+  let delay = 1000;
+  
+  for (let i = 0; i < maxRetries; i++) {
     try {
-      const activeDocs = uploadedDocs.filter(d => selectedDocIds.includes(d.id));
-      const contextText = activeDocs.length > 0 
-        ? activeDocs.map(d => `Document Name: ${d.name}\nContent: ${d.content}`).join('\n\n')
-        : "No specific documents selected. Please advise the user to select context documents for specific analysis.";
-        
-      const systemPrompt = `You are EcoLens Autonomous Agent, a proactive AI specializing in circular economy, sustainability, and environmental compliance. 
-      Selected Context Documents:\n${contextText}\n
-      Instructions:
-      1. Act as an analytical agent: Break down the user request, synthesize data from the explicitly selected documents, and provide actionable intelligence.
-      2. Cross-reference findings if multiple documents are selected.
-      3. Answer ONLY based on the selected document context.
-      4. Append a citation block at the end of extracted information: [Source: Document Name, Page X].`;
-
-      const payload = {
-        contents: [{ role: 'user', parts: [{ text: textToSend }] }],
-        systemInstruction: { parts: [{ text: systemPrompt }] }
-      };
-
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-
-      if (!response.ok) throw new Error('Failed to fetch response');
+      
       const data = await response.json();
-      const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (aiText) setChatMessages(prev => [...prev, { role: 'assistant', text: aiText }]);
+      if (data.error) throw new Error(data.error.message);
+      
+      const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      return resultText;
     } catch (error) {
-      setChatMessages(prev => [...prev, { role: 'assistant', text: `Error: ${error.message}. Please ensure your API key is valid.` }]);
+      if (i === maxRetries - 1) throw error;
+      await new Promise(resolve => setTimeout(resolve, delay));
+      delay *= 2;
+    }
+  }
+};
+
+// --- Main Application ---
+
+export default function EcoLensApp() {
+  const [darkMode, setDarkMode] = useState(true);
+  const [apiKey, setApiKey] = useState('');
+  const [apiStatus, setApiStatus] = useState('disconnected'); // disconnected, testing, connected, error
+  
+  const [documents, setDocuments] = useState([]);
+  const [chatHistory, setChatHistory] = useState([
+    { role: 'assistant', text: 'Hello! Upload some documents and select them to begin analysis. I can help you identify circular economy opportunities and check compliance.' }
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  
+  const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, explorer, slides, brief, map, policy
+  const [pdfjsLoaded, setPdfjsLoaded] = useState(false);
+
+  const fileInputRef = useRef(null);
+  const chatEndRef = useRef(null);
+
+  // Load PDF.js from CDN dynamically
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
+    script.async = true;
+    document.body.appendChild(script);
+    
+    script.onload = () => {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+      setPdfjsLoaded(true);
+    };
+
+    return () => { document.body.removeChild(script); };
+  }, []);
+
+  // Auto-scroll chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatHistory]);
+
+  // Test API Key
+  useEffect(() => {
+    const testApi = async () => {
+      if (apiKey.length > 20) {
+        setApiStatus('testing');
+        try {
+          await fetchGemini("Reply 'ok'", apiKey);
+          setApiStatus('connected');
+        } catch (e) {
+          setApiStatus('error');
+        }
+      } else {
+        setApiStatus('disconnected');
+      }
+    };
+    
+    const timeoutId = setTimeout(testApi, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [apiKey]);
+
+  const handleFileUpload = async (event) => {
+    const files = Array.from(event.target.files);
+    if (!files.length) return;
+
+    for (const file of files) {
+      const newDoc = {
+        id: Math.random().toString(36).substr(2, 9),
+        name: file.name,
+        type: file.name.endsWith('.pdf') ? 'pdf' : 'txt',
+        selected: true,
+        isParsing: true,
+        text: ''
+      };
+      
+      setDocuments(prev => [...prev, newDoc]);
+
+      try {
+        let extractedText = '';
+        if (file.name.endsWith('.pdf') && pdfjsLoaded) {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            const pageText = content.items.map(item => item.str).join(' ');
+            extractedText += `\n--- [Page ${i}] ---\n${pageText}\n`;
+          }
+        } else {
+          extractedText = await file.text();
+        }
+
+        setDocuments(prev => prev.map(doc => 
+          doc.id === newDoc.id ? { ...doc, isParsing: false, text: extractedText } : doc
+        ));
+      } catch (error) {
+        console.error("Error parsing file", error);
+        setDocuments(prev => prev.map(doc => 
+          doc.id === newDoc.id ? { ...doc, isParsing: false, text: 'Error extracting text.', error: true } : doc
+        ));
+      }
+    }
+    
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const toggleDocumentSelection = (id) => {
+    setDocuments(prev => prev.map(doc => 
+      doc.id === id ? { ...doc, selected: !doc.selected } : doc
+    ));
+  };
+
+  const deleteDocument = (id) => {
+    setDocuments(prev => prev.filter(doc => doc.id !== id));
+  };
+
+  const getSelectedContext = () => {
+    const selectedDocs = documents.filter(d => d.selected && d.text);
+    if (selectedDocs.length === 0) return "No documents provided.";
+    return selectedDocs.map(d => `Document Name: ${d.name}\nContent:\n${d.text.substring(0, 50000)}`).join('\n\n==========\n\n');
+  };
+
+  const handleChatSubmit = async (e) => {
+    e.preventDefault();
+    if (!chatInput.trim() || !apiKey || apiStatus !== 'connected') return;
+
+    const userMessage = chatInput.trim();
+    setChatInput('');
+    setChatHistory(prev => [...prev, { role: 'user', text: userMessage }]);
+    setIsChatLoading(true);
+
+    try {
+      const context = getSelectedContext();
+      const systemInstruction = `You are EcoLens, an AI-powered research and compliance assistant for the circular economy. You operate in three stages: Insight Lens (material extraction), Opportunity Lens (circular mapping), and Compliance Lens (regulatory audit). 
+      Base your answers strictly on the provided documents. 
+      CRITICAL: Always cite your sources in your response using the format [DocumentName.pdf, Page X] when providing facts, data, or compliance rules.`;
+      
+      const prompt = `Context Documents:\n${context}\n\nUser Query: ${userMessage}`;
+      
+      const responseText = await fetchGemini(prompt, apiKey, false, systemInstruction);
+      setChatHistory(prev => [...prev, { role: 'assistant', text: responseText }]);
+    } catch (error) {
+      setChatHistory(prev => [...prev, { role: 'assistant', text: `Error: ${error.message}. Please check your API key.` }]);
     } finally {
       setIsChatLoading(false);
     }
   };
 
-  const toggleDocSelection = (id) => {
-    setSelectedDocIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-  };
-
-  const handleAgentAction = (actionType) => {
-    let prompt = "";
-    if (actionType === "summarize") prompt = "Agent Action: Summarize the key findings and strategic opportunities from the currently selected documents.";
-    else if (actionType === "cross_reference") prompt = "Agent Action: Cross-reference the selected documents. Identify synergies, conflicting information, or overlapping opportunities.";
-    else if (actionType === "compliance_check") prompt = "Agent Action: Review the selected documents exclusively for regulatory and compliance constraints. Highlight any risks.";
-    handleSendMessage(null, prompt);
-  };
-
-  const formatChatText = (text) => {
-    const parts = text.split(/(\[Source:.*?[\]])/g);
-    return parts.map((part, i) => {
-      if (part.startsWith('[Source:')) {
-        return (
-          <span key={i} className="inline-flex items-center gap-1 text-[10px] bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded ml-1 mt-1 font-medium border border-emerald-200 dark:border-emerald-800">
-            <LinkIcon className="w-3 h-3" />
-            {part.replace('[Source: ', '').replace(']', '')}
-          </span>
-        );
-      }
-      return <span key={i}>{part}</span>;
-    });
-  };
-
   return (
-    <div className={`flex h-screen overflow-hidden transition-colors duration-300 font-sans ${darkMode ? 'bg-slate-950 text-slate-100' : 'bg-[#F4F7F6] text-slate-900'}`}>
+    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-200 ${darkMode ? 'bg-slate-950 text-slate-200' : 'bg-slate-50 text-slate-800'}`}>
       
-      {/* ================= SIDEBAR (Left) ================= */}
-      <aside className="w-64 bg-[#0A1914] text-slate-300 flex flex-col shadow-2xl z-20 flex-shrink-0">
-        <div className="p-6 flex items-center gap-3">
-          <div className="bg-emerald-500 p-1.5 rounded-lg text-white">
-            <Leaf className="w-6 h-6" />
+      {/* Header / Menu Bar */}
+      <header className={`h-16 flex items-center justify-between px-6 border-b z-10 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+        <div className="flex items-center gap-2">
+          <div className="bg-emerald-500 p-1.5 rounded-lg">
+            <Zap className="w-5 h-5 text-white" />
           </div>
-          <span className="text-2xl font-bold text-white tracking-tight">EcoLens</span>
+          <span className="text-xl font-bold tracking-tight">EcoLens</span>
         </div>
 
-        <nav className="flex-1 px-4 py-2 space-y-1.5 overflow-y-auto custom-scrollbar">
-          <NavItem icon={LayoutDashboard} label="Dashboard" active />
-          <NavItem icon={FolderOpen} label="My Documents" />
-          <NavItem icon={History} label="Analysis History" />
-          <NavItem icon={Library} label="Compliance Library" />
-          <NavItem icon={Settings} label="Settings" />
-
-          {/* Upload Widget */}
-          <div className="mt-8 mb-6 bg-white/5 border border-white/10 rounded-xl p-4 text-center border-dashed">
-            <UploadCloud className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
-            <p className="text-xs font-semibold text-white mb-1">Upload Document</p>
-            <p className="text-[10px] text-slate-400 mb-3 px-2">Drag & drop PDF, DOCX here</p>
-            <button className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-2 px-4 rounded-lg w-full transition-colors">
-              Browse Files
+        <nav className="flex items-center gap-1 hidden md:flex">
+          {[
+            { id: 'dashboard', label: 'Overview', icon: BarChart },
+            { id: 'explorer', label: 'Concept Explorer', icon: Layers },
+            { id: 'slides', label: 'Deck Generator', icon: FileOutput },
+            { id: 'brief', label: 'Research Brief', icon: FileText },
+            { id: 'map', label: 'Knowledge Map', icon: Network },
+            { id: 'policy', label: 'Policy Impact', icon: AlertTriangle },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors
+                ${activeTab === tab.id 
+                  ? (darkMode ? 'bg-slate-800 text-emerald-400' : 'bg-emerald-50 text-emerald-600') 
+                  : (darkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-600')}`}
+            >
+              <tab.icon className="w-4 h-4" />
+              {tab.label}
             </button>
-          </div>
-
-          <div>
-            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 px-2">Data Sources</h4>
-            <div className="space-y-1">
-              {SAMPLE_DOCS.map(doc => (
-                <button 
-                  key={doc.id} onClick={() => handleFileUpload(doc)}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors text-left"
-                >
-                  <FileText className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
-                  <span className="truncate">{doc.name}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+          ))}
         </nav>
-      </aside>
 
-      {/* ================= MAIN CONTENT (Center) ================= */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto relative">
-        
-        {/* Top Header */}
-        <header className={`px-8 pt-6 pb-0 flex flex-col border-b ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} sticky top-0 z-20`}>
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h1 className={`text-xl font-bold flex items-center gap-2 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
-                AI-Powered Research Copilot
-                <span className="text-[10px] uppercase bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400 px-2 py-0.5 rounded-full font-bold">V 2.0</span>
-              </h1>
-              <p className={`text-xs mt-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Advanced Circular Economy Synthesizer & Strategist</p>
-            </div>
-            
-            <div className="flex items-center gap-4">
-              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${darkMode ? 'bg-slate-950 border-slate-700' : 'bg-slate-50 border-slate-300'}`}>
-                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-rose-500'}`} />
-                <input 
-                  type="password" placeholder="Gemini API Key..." value={apiKey} onChange={(e) => setApiKey(e.target.value)}
-                  className="bg-transparent border-none outline-none text-xs w-24 focus:w-48 transition-all placeholder:text-slate-400"
-                />
-              </div>
-              <button onClick={() => setDarkMode(!darkMode)} className={`p-2 rounded-full transition-colors ${darkMode ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-100 text-slate-600'}`}>
-                {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-              </button>
-              <div className="flex items-center gap-2 cursor-pointer">
-                <div className="w-8 h-8 rounded-full bg-slate-300 overflow-hidden border-2 border-emerald-500">
-                  <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" className="w-full h-full object-cover" />
-                </div>
-              </div>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <div className={`relative flex items-center ${darkMode ? 'bg-slate-800' : 'bg-slate-100'} rounded-md px-3 py-1.5`}>
+              <Key className={`w-4 h-4 mr-2 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`} />
+              <input 
+                type="password"
+                placeholder="Gemini API Key"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                className={`bg-transparent border-none outline-none text-sm w-48 ${darkMode ? 'text-white placeholder-slate-500' : 'text-slate-900 placeholder-slate-400'}`}
+              />
+              <div className={`w-2.5 h-2.5 rounded-full ml-2 shadow-[0_0_8px_currentColor]
+                ${apiStatus === 'connected' ? 'bg-emerald-500 text-emerald-500' : 
+                  apiStatus === 'testing' ? 'bg-yellow-500 text-yellow-500 animate-pulse' : 
+                  apiStatus === 'error' ? 'bg-red-500 text-red-500' : 'bg-slate-500 text-transparent shadow-none'}`} 
+                title={`API Status: ${apiStatus}`}
+              />
             </div>
           </div>
-
-          {}
-          <div className="flex space-x-1 overflow-x-auto custom-scrollbar pb-[-1px]">
-            <TabButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={LayoutDashboard} label="AI Pipeline" darkMode={darkMode} />
-            <TabButton active={activeTab === 'concept'} onClick={() => setActiveTab('concept')} icon={BookOpen} label="Concept Explorer" darkMode={darkMode} />
-            <TabButton active={activeTab === 'map'} onClick={() => setActiveTab('map')} icon={Network} label="Knowledge Map" darkMode={darkMode} />
-            <TabButton active={activeTab === 'policy'} onClick={() => setActiveTab('policy')} icon={TrendingUp} label="Policy Impact" darkMode={darkMode} />
-            <TabButton active={activeTab === 'brief'} onClick={() => setActiveTab('brief')} icon={FileText} label="Research Brief" darkMode={darkMode} />
-            <TabButton active={activeTab === 'slides'} onClick={() => setActiveTab('slides')} icon={Presentation} label="Slide Deck" darkMode={darkMode} />
+          <button onClick={() => setDarkMode(!darkMode)} className={`p-2 rounded-full ${darkMode ? 'bg-slate-800 hover:bg-slate-700' : 'bg-slate-100 hover:bg-slate-200'}`}>
+            {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
+          <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold text-sm">
+            U
           </div>
-        </header>
-
-        {/* Dynamic Content Area based on Tab */}
-        <div className="p-8 flex flex-col gap-6 max-w-6xl mx-auto w-full">
-          {activeTab === 'dashboard' && <DashboardView uploadedDocs={uploadedDocs} pipelineState={pipelineState} progress={progress} darkMode={darkMode} setUploadedDocs={setUploadedDocs} />}
-          {activeTab === 'concept' && <ConceptExplorerView darkMode={darkMode} />}
-          {activeTab === 'map' && <KnowledgeMapView darkMode={darkMode} />}
-          {activeTab === 'policy' && <PolicyImpactView darkMode={darkMode} />}
-          {activeTab === 'brief' && <ResearchBriefView darkMode={darkMode} />}
-          {activeTab === 'slides' && <SlideDeckView darkMode={darkMode} />}
         </div>
-      </main>
+      </header>
 
-      {/* ================= RIGHT PANEL (Chatbot) ================= */}
-      <aside className={`w-[360px] flex flex-col border-l flex-shrink-0 z-10 shadow-[-10px_0_15px_-3px_rgba(0,0,0,0.05)] ${darkMode ? 'bg-[#0F172A] border-slate-800' : 'bg-white border-slate-200'}`}>
-        <div className="flex-1 flex flex-col min-h-0 bg-slate-50 dark:bg-slate-900/50">
-          <div className={`p-4 border-b flex justify-between items-center bg-white dark:bg-[#0F172A] ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
-            <div>
-              <h3 className="text-sm font-bold flex items-center gap-2">
-                EcoLens Chat
-                <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-transparent bg-clip-text text-[10px] font-black uppercase tracking-wider">Gemini 2.5 Flash</span>
-              </h3>
-              <p className="text-[10px] text-slate-500">Ask about uploaded documents</p>
-            </div>
-            <div className="flex items-center gap-1.5 text-[10px] font-bold">
-              {isConnected ? (
-                <span className="text-emerald-500 flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"/> Ready</span>
-              ) : (
-                <span className="text-red-500 flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> Missing Key</span>
-              )}
-            </div>
+      {/* Main Layout */}
+      <div className="flex flex-1 overflow-hidden">
+        
+        {/* Left Sidebar: Document Management */}
+        <aside className={`w-64 flex flex-col border-r ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+          <div className="p-4">
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-md font-medium transition-colors"
+            >
+              <Upload className="w-4 h-4" />
+              Upload Documents
+            </button>
+            <input 
+              type="file" 
+              multiple 
+              accept=".pdf,.txt" 
+              className="hidden" 
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+            />
           </div>
-
-          {}
-          <div className={`p-3 border-b flex flex-col gap-2 ${darkMode ? 'border-slate-800 bg-slate-900/80' : 'border-slate-200 bg-slate-100/50'}`}>
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                <Cpu className="w-3 h-3"/> Agent Context
-              </span>
-              <span className="text-[10px] text-slate-400">{selectedDocIds.length}/{uploadedDocs.length} Selected</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {uploadedDocs.map(doc => (
-                <button
-                  key={doc.id}
-                  onClick={() => toggleDocSelection(doc.id)}
-                  className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-md border transition-all ${selectedDocIds.includes(doc.id) ? 'bg-emerald-100 border-emerald-300 text-emerald-700 shadow-sm dark:bg-emerald-900/40 dark:border-emerald-700 dark:text-emerald-300' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-700'}`}
-                >
-                  <div className={`w-1.5 h-1.5 rounded-full ${selectedDocIds.includes(doc.id) ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
-                  {doc.name.substring(0, 18)}...
-                </button>
-              ))}
-              {uploadedDocs.length === 0 && <span className="text-xs text-slate-400 italic">No documents uploaded</span>}
-            </div>
-            
-            {/* Agent Actions */}
-            {selectedDocIds.length > 0 && (
-               <div className="flex gap-2 mt-1">
-                 <button onClick={() => handleAgentAction('summarize')} className="flex-1 text-[10px] py-1.5 bg-white border border-slate-200 hover:border-emerald-300 hover:text-emerald-600 text-slate-600 dark:bg-slate-950 dark:border-slate-700 dark:hover:border-emerald-500/50 dark:text-slate-300 rounded shadow-sm transition-all flex items-center justify-center gap-1">
-                   <FileText className="w-3 h-3"/> Summarize
-                 </button>
-                 <button onClick={() => handleAgentAction('cross_reference')} disabled={selectedDocIds.length < 2} className="flex-1 text-[10px] py-1.5 bg-white border border-slate-200 hover:border-emerald-300 hover:text-emerald-600 text-slate-600 dark:bg-slate-950 dark:border-slate-700 dark:hover:border-emerald-500/50 dark:text-slate-300 rounded shadow-sm transition-all flex items-center justify-center gap-1 disabled:opacity-50 disabled:hover:border-slate-200 disabled:hover:text-slate-600 dark:disabled:hover:border-slate-700 dark:disabled:hover:text-slate-300">
-                   <Network className="w-3 h-3"/> Cross-Ref
-                 </button>
-               </div>
+          
+          <div className="px-4 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Knowledge Base
+          </div>
+          
+          <div className="flex-1 overflow-y-auto px-2 space-y-1">
+            {documents.length === 0 ? (
+              <div className="text-center py-8 text-slate-500 text-sm px-4">
+                No documents uploaded. Upload PDFs to start analyzing.
+              </div>
+            ) : (
+              documents.map(doc => (
+                <div key={doc.id} className={`flex items-center gap-2 p-2 rounded-md group ${darkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-200'}`}>
+                  <input 
+                    type="checkbox" 
+                    checked={doc.selected}
+                    onChange={() => toggleDocumentSelection(doc.id)}
+                    className="rounded border-slate-400 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <div className="flex-1 truncate text-sm flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <span className="truncate" title={doc.name}>{doc.name}</span>
+                  </div>
+                  {doc.isParsing ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400 shrink-0" />
+                  ) : (
+                    <button onClick={() => deleteDocument(doc.id)} className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-500 transition-opacity shrink-0">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))
             )}
           </div>
+          
+          <div className={`p-4 border-t text-xs ${darkMode ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500'}`}>
+            <div className="flex justify-between mb-1">
+              <span>Selected Context:</span>
+              <span className="font-medium text-emerald-500">{documents.filter(d => d.selected).length} files</span>
+            </div>
+          </div>
+        </aside>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-            {chatMessages.map((msg, idx) => (
-              <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] rounded-2xl p-3 text-sm leading-relaxed ${
-                  msg.role === 'user' 
-                    ? 'bg-emerald-600 text-white rounded-tr-sm' 
-                    : darkMode ? 'bg-slate-800 text-slate-200 rounded-tl-sm' : 'bg-white border border-slate-200 shadow-sm rounded-tl-sm text-slate-700'
-                }`}>
-                  {msg.role === 'assistant' ? formatChatText(msg.text) : msg.text}
+        {/* Center Canvas: Active Tab Content */}
+        <main className={`flex-1 overflow-y-auto p-6 ${darkMode ? 'bg-slate-950' : 'bg-white'}`}>
+          <div className="max-w-5xl mx-auto space-y-6">
+            {activeTab === 'dashboard' && <DashboardView darkMode={darkMode} documents={documents} />}
+            {activeTab === 'explorer' && <ConceptExplorer apiKey={apiKey} context={getSelectedContext()} darkMode={darkMode} apiStatus={apiStatus} />}
+            {activeTab === 'slides' && <SlideGenerator apiKey={apiKey} context={getSelectedContext()} darkMode={darkMode} apiStatus={apiStatus} />}
+            {activeTab === 'brief' && <ResearchBrief apiKey={apiKey} context={getSelectedContext()} darkMode={darkMode} apiStatus={apiStatus} />}
+            {activeTab === 'map' && <KnowledgeMap apiKey={apiKey} context={getSelectedContext()} darkMode={darkMode} apiStatus={apiStatus} />}
+            {activeTab === 'policy' && <PolicyImpact apiKey={apiKey} context={getSelectedContext()} darkMode={darkMode} apiStatus={apiStatus} />}
+          </div>
+        </main>
+
+        {/* Right Sidebar: Chatbot */}
+        <aside className={`w-80 flex flex-col border-l ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+          <div className={`p-4 border-b flex items-center gap-2 ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+            <MessageSquare className="w-5 h-5 text-emerald-500" />
+            <h2 className="font-semibold">EcoLens Copilot</h2>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {chatHistory.map((msg, idx) => (
+              <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                <div className={`max-w-[90%] p-3 rounded-lg text-sm whitespace-pre-wrap leading-relaxed
+                  ${msg.role === 'user' 
+                    ? 'bg-emerald-600 text-white rounded-br-none' 
+                    : (darkMode ? 'bg-slate-800 text-slate-200 rounded-bl-none' : 'bg-white border text-slate-700 rounded-bl-none')}`}>
+                  {msg.text}
                 </div>
               </div>
             ))}
             {isChatLoading && (
-              <div className="flex justify-start">
-                <div className={`max-w-[80%] rounded-2xl p-3 rounded-tl-sm flex items-center gap-2 ${darkMode ? 'bg-slate-800' : 'bg-white border border-slate-200'}`}>
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+              <div className="flex items-start">
+                <div className={`p-3 rounded-lg rounded-bl-none flex items-center gap-2 ${darkMode ? 'bg-slate-800' : 'bg-white border'}`}>
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-500" />
+                  <span className="text-sm text-slate-400">Analyzing data...</span>
                 </div>
               </div>
             )}
             <div ref={chatEndRef} />
           </div>
-
-          <div className={`p-4 border-t bg-white dark:bg-[#0F172A] ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
-            <form onSubmit={handleSendMessage} className={`flex items-center gap-2 p-1.5 rounded-xl border transition-colors ${darkMode ? 'bg-slate-900 border-slate-700 focus-within:border-emerald-500' : 'bg-slate-50 border-slate-300 focus-within:border-emerald-500 focus-within:bg-white'}`}>
-              <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={isConnected ? "Ask EcoLens..." : "Enter API key to chat"} disabled={!isConnected || isChatLoading} className="flex-1 bg-transparent border-none outline-none text-sm px-3 text-slate-800 dark:text-white placeholder:text-slate-400 disabled:opacity-50" />
-              <button type="submit" disabled={!chatInput.trim() || !isConnected || isChatLoading} className="p-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-300 dark:disabled:bg-slate-800 text-white transition-colors">
-                <Send className="w-4 h-4" />
+          
+          <div className={`p-4 border-t ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+            <form onSubmit={handleChatSubmit} className="relative">
+              <input 
+                type="text" 
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder={apiStatus !== 'connected' ? "Connect API to chat..." : "Ask about compliance, materials..."}
+                disabled={apiStatus !== 'connected' || isChatLoading}
+                className={`w-full pr-10 pl-3 py-2.5 rounded-lg text-sm border focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-shadow
+                  ${darkMode 
+                    ? 'bg-slate-950 border-slate-700 text-white placeholder-slate-500 disabled:bg-slate-900' 
+                    : 'bg-white border-slate-300 text-slate-900 disabled:bg-slate-100'}`}
+              />
+              <button 
+                type="submit" 
+                disabled={!chatInput.trim() || apiStatus !== 'connected' || isChatLoading}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-500 text-white rounded-md transition-colors"
+              >
+                <Zap className="w-3.5 h-3.5" />
               </button>
             </form>
           </div>
-        </div>
-      </aside>
+        </aside>
 
-      <style dangerouslySetInnerHTML={{__html: `
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; }
-        
-        @keyframes pulse-node {
-          0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
-          70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
-        }
-        .animate-pulse-node { animation: pulse-node 2s infinite; }
-      `}} />
+      </div>
     </div>
   );
 }
 
-// ================= NEW TAB COMPONENTS =================
+// --- Tab Components ---
 
-function ConceptExplorerView({ darkMode }) {
-  const concepts = [
-    { name: "Lignocellulosic Fiber", doc: "UAE_Dates_Processing_Report.pdf", desc: "A complex matrix of plant cellular material (cellulose, hemicellulose, and lignin) found in date palm fronds. Excellent structural precursor for bio-composites.", tags: ["Biomaterial", "Structural"] },
-    { name: "Anaerobic Decomposition", doc: "Coffee_Grounds_Waste_Data.pdf", desc: "The breakdown of high-moisture organic matter (like spent coffee grounds) by microorganisms in the absence of oxygen, leading to methane emissions if unmanaged.", tags: ["Risk", "Chemistry"] },
-    { name: "Bio-packaging Subsidies", doc: "Tadweer_Sustainability_Report_2024.pdf", desc: "Government financial incentives designed to offset the higher production costs of biodegradable packaging, making it competitive with single-use plastics.", tags: ["Policy", "Financial"] }
-  ];
-
+function DashboardView({ darkMode, documents }) {
+  const hasDocs = documents.some(d => d.selected && d.text);
+  
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className={`p-6 rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-        <h2 className="text-lg font-bold flex items-center gap-2 mb-2"><BookOpen className="w-5 h-5 text-emerald-500"/> Concept Explorer</h2>
-        <p className={`text-xs mb-6 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>An AI-generated Wikipedia extracted directly from your uploaded documents.</p>
+      <div>
+        <h1 className="text-2xl font-bold mb-1">AI-Powered Research & Compliance Copilot</h1>
+        <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Turning environmental data into circular economy opportunities</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        <div className="space-y-3">
-          {concepts.map((concept, i) => (
-            <details key={i} className={`group border rounded-xl overflow-hidden transition-all ${darkMode ? 'bg-slate-950 border-slate-800 open:border-emerald-500/50' : 'bg-slate-50 border-slate-200 open:border-emerald-300'}`}>
-              <summary className={`flex items-center justify-between p-4 cursor-pointer font-semibold text-sm transition-colors ${darkMode ? 'text-slate-200 hover:bg-slate-900' : 'text-slate-800 hover:bg-slate-100'}`}>
-                <div className="flex items-center gap-3">
-                  <ChevronRight className="w-4 h-4 transition-transform group-open:rotate-90 text-emerald-500" />
-                  {concept.name}
+        {/* Pipeline Flow */}
+        <div className={`lg:col-span-2 p-6 rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="font-semibold flex items-center gap-2">
+              <Zap className="w-4 h-4 text-emerald-500" /> AI Analysis Pipeline
+            </h3>
+            <span className="px-2 py-1 text-xs font-medium bg-emerald-500/10 text-emerald-500 rounded-full">Live</span>
+          </div>
+          
+          <div className="flex items-center justify-between relative mb-8 px-4">
+            <div className="absolute top-1/2 left-8 right-8 h-0.5 bg-slate-200 dark:bg-slate-700 -z-10"></div>
+            
+            {['Insight Lens', 'Opportunity Lens', 'Compliance Lens'].map((step, i) => (
+              <div key={i} className="flex flex-col items-center gap-2">
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center border-4 
+                  ${darkMode ? 'bg-slate-900 border-slate-950' : 'bg-white border-slate-50'}
+                  ${hasDocs ? (i === 0 ? 'text-emerald-500' : i === 1 ? 'text-blue-500' : 'text-purple-500') : 'text-slate-400'}`}>
+                  {i === 0 ? <Search className="w-5 h-5" /> : i === 1 ? <Layers className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
                 </div>
-                <div className="flex gap-2">
-                  {concept.tags.map(tag => (
-                    <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400">{tag}</span>
-                  ))}
-                </div>
-              </summary>
-              <div className={`p-4 pt-0 text-sm border-t ${darkMode ? 'border-slate-800 text-slate-300' : 'border-slate-200 text-slate-600'}`}>
-                <p className="mt-4">{concept.desc}</p>
-                <div className="mt-4 flex items-center gap-1.5 text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-1.5 rounded w-fit border border-emerald-100 dark:border-emerald-900/50">
-                  <LinkIcon className="w-3 h-3" /> Source: {concept.doc}
-                </div>
+                <span className="text-xs font-medium">{step}</span>
               </div>
-            </details>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function KnowledgeMapView({ darkMode }) {
-  return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col">
-      <div className={`p-6 rounded-xl border flex-1 flex flex-col ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-        <h2 className="text-lg font-bold flex items-center gap-2 mb-2"><Network className="w-5 h-5 text-emerald-500"/> Knowledge Map</h2>
-        <p className={`text-xs mb-6 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Visual representation of interconnected materials, processes, and applications.</p>
-        
-        <div className={`relative flex-1 rounded-lg border overflow-hidden bg-slate-50 dark:bg-slate-950 flex items-center justify-center min-h-[400px] ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
-          {/* Simulated Network Graph via SVG */}
-          <svg className="absolute inset-0 w-full h-full" style={{ minWidth: '600px' }}>
-            <defs>
-              <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                <path d="M 0 0 L 10 5 L 0 10 z" fill={darkMode ? '#475569' : '#94a3b8'} />
-              </marker>
-            </defs>
-            {/* Edges */}
-            <path d="M 200 150 C 350 150, 300 250, 450 250" fill="none" stroke={darkMode ? '#475569' : '#94a3b8'} strokeWidth="2" strokeDasharray="5,5" markerEnd="url(#arrow)" />
-            <path d="M 200 350 C 350 350, 300 250, 450 250" fill="none" stroke={darkMode ? '#475569' : '#94a3b8'} strokeWidth="2" strokeDasharray="5,5" markerEnd="url(#arrow)" />
-            <path d="M 450 250 C 600 250, 600 150, 750 150" fill="none" stroke={darkMode ? '#475569' : '#94a3b8'} strokeWidth="2" markerEnd="url(#arrow)" />
-            <path d="M 450 250 C 600 250, 600 350, 750 350" fill="none" stroke={darkMode ? '#475569' : '#94a3b8'} strokeWidth="2" markerEnd="url(#arrow)" />
-          </svg>
-          
-          {/* Nodes */}
-          <NetworkNode x="10%" y="25%" title="Date Biomass" type="input" darkMode={darkMode} />
-          <NetworkNode x="10%" y="65%" title="Coffee Grounds" type="input" darkMode={darkMode} />
-          
-          <NetworkNode x="45%" y="45%" title="Thermal Pyrolysis" type="process" darkMode={darkMode} pulse />
-          
-          <NetworkNode x="75%" y="25%" title="Agricultural Biochar" type="output" darkMode={darkMode} />
-          <NetworkNode x="75%" y="65%" title="Bioplastic Resins" type="output" darkMode={darkMode} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function NetworkNode({ x, y, title, type, darkMode, pulse }) {
-  const colors = {
-    input: darkMode ? 'bg-amber-900/50 border-amber-500/50 text-amber-200' : 'bg-amber-100 border-amber-300 text-amber-800',
-    process: darkMode ? 'bg-emerald-900/50 border-emerald-500 text-emerald-200' : 'bg-emerald-100 border-emerald-500 text-emerald-800',
-    output: darkMode ? 'bg-blue-900/50 border-blue-500/50 text-blue-200' : 'bg-blue-100 border-blue-300 text-blue-800',
-  };
-  return (
-    <div className={`absolute transform -translate-x-1/2 -translate-y-1/2 px-4 py-2 rounded-lg border-2 text-xs font-bold shadow-lg backdrop-blur-sm z-10 ${colors[type]} ${pulse ? 'animate-pulse-node' : ''}`} style={{ left: x, top: y }}>
-      {title}
-    </div>
-  );
-}
-
-function PolicyImpactView({ darkMode }) {
-  const [selectedScenario, setSelectedScenario] = useState(1);
-
-  const scenarios = [
-    { id: 1, title: "Ban on Open Incineration", icon: Beaker },
-    { id: 2, title: "Organic Waste Landfill Tax", icon: TrendingUp },
-    { id: 3, title: "Subsidies for Bio-Packaging", icon: Globe }
-  ];
-
-  return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className={`p-6 rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-        <h2 className="text-lg font-bold flex items-center gap-2 mb-2"><TrendingUp className="w-5 h-5 text-emerald-500"/> Policy Impact Generator</h2>
-        <p className={`text-xs mb-6 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Simulate regulatory changes to see operational and financial cascading effects.</p>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="space-y-3">
-            <h3 className={`text-xs font-bold uppercase ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Select Scenario</h3>
-            {scenarios.map(s => (
-              <button key={s.id} onClick={() => setSelectedScenario(s.id)} className={`w-full flex items-center gap-3 p-3 rounded-lg border text-sm font-medium transition-all text-left ${selectedScenario === s.id ? 'bg-emerald-500 text-white border-emerald-500 shadow-md' : darkMode ? 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-600' : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'}`}>
-                <s.icon className="w-4 h-4" /> {s.title}
-              </button>
             ))}
           </div>
 
-          <div className="col-span-2">
-            <h3 className={`text-xs font-bold uppercase mb-3 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Predicted Impact Chain</h3>
-            <div className={`p-5 rounded-xl border relative overflow-hidden ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
-              <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500" />
-              {selectedScenario === 1 && (
-                <div className="space-y-4 animate-in fade-in">
-                  <ImpactRow time="Immediate (0-6 mo)" desc="Farms holding date palm waste face stockpiling issues. Urgent need for collection logistics." type="risk" darkMode={darkMode}/>
-                  <ImpactRow time="Mid-term (1-2 yrs)" desc="Rise in decentralized thermal pyrolysis units (Biochar production) at farm level to manage volume." type="opportunity" darkMode={darkMode}/>
-                  <ImpactRow time="Long-term (3+ yrs)" desc="Establishment of a robust secondary market for agricultural carbon credits." type="positive" darkMode={darkMode}/>
+          <div className="space-y-3">
+            {[
+              { title: 'Insight Lens', desc: hasDocs ? 'Extracted key materials and environmental insights.' : 'Waiting for documents...', status: hasDocs ? 'Completed' : 'Pending', color: 'emerald' },
+              { title: 'Opportunity Lens', desc: hasDocs ? 'Identifying circular economy opportunities.' : 'Waiting for context...', status: hasDocs ? 'In Progress' : 'Pending', color: 'blue' },
+              { title: 'Compliance Lens', desc: 'Checking regulatory compliance standards.', status: 'Pending', color: 'purple' },
+            ].map((stage, i) => (
+              <div key={i} className={`p-4 rounded-lg border flex items-center justify-between
+                ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                <div className="flex items-center gap-4">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center bg-${stage.color}-500/10 text-${stage.color}-500`}>
+                    {stage.status === 'Completed' ? <CheckCircle className="w-4 h-4" /> : stage.status === 'In Progress' ? <Loader2 className="w-4 h-4 animate-spin" /> : <div className="w-2 h-2 rounded-full bg-current" />}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold">{stage.title}</h4>
+                    <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{stage.desc}</p>
+                  </div>
                 </div>
-              )}
-              {selectedScenario !== 1 && (
-                <div className="h-40 flex items-center justify-center flex-col gap-2 text-slate-400">
-                  <Cpu className="w-8 h-8 opacity-50" />
-                  <span className="text-xs">Generating simulations...</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ImpactRow({ time, desc, type, darkMode }) {
-  const colors = {
-    risk: 'text-amber-500 bg-amber-500/10 border-amber-500/20',
-    opportunity: 'text-blue-500 bg-blue-500/10 border-blue-500/20',
-    positive: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20'
-  };
-  return (
-    <div className={`p-3 rounded-lg border text-sm flex flex-col gap-1 ${colors[type]}`}>
-      <span className="text-[10px] font-bold uppercase opacity-80">{time}</span>
-      <span className={darkMode ? 'text-slate-300' : 'text-slate-700'}>{desc}</span>
-    </div>
-  );
-}
-
-function ResearchBriefView({ darkMode }) {
-  return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className={`p-8 rounded-xl border max-w-3xl mx-auto shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-        <div className="flex justify-between items-start mb-8 border-b pb-4 dark:border-slate-800 border-slate-200">
-          <div>
-            <h1 className={`text-2xl font-serif font-bold ${darkMode ? 'text-slate-100' : 'text-slate-900'}`}>AI Research Brief: Biomass Circularity</h1>
-            <p className="text-sm text-emerald-600 dark:text-emerald-400 mt-1">Generated by EcoLens Copilot</p>
-          </div>
-          <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition-colors">
-            <Download className="w-4 h-4"/> Export PDF
-          </button>
-        </div>
-
-        <div className={`space-y-6 text-sm leading-relaxed ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-          <section>
-            <h3 className={`font-bold text-base mb-2 ${darkMode ? 'text-white' : 'text-black'}`}>Executive Summary</h3>
-            <p>Analysis of the uploaded agricultural and urban waste datasets indicates a high potential for secondary material recovery. Specifically, Lignocellulosic fiber from date palms and high-carbon spent coffee grounds present viable pathways for commercial upcycling, diverting 80% of current volume from landfills.</p>
-          </section>
-          
-          <section>
-            <h3 className={`font-bold text-base mb-2 ${darkMode ? 'text-white' : 'text-black'}`}>Key Findings</h3>
-            <ul className="list-disc pl-5 space-y-1">
-              <li><strong>Volume & Composition:</strong> Date seeds comprise 35% of processing waste, offering high carbon density suitable for pyrolysis.</li>
-              <li><strong>Regulatory Tailwind:</strong> UAE Cabinet Resolution No. 12 banning open incineration creates an immediate need for alternative processing.</li>
-              <li><strong>Financial Viability:</strong> Subsidies for bio-packaging significantly reduce the capex risk for establishing Chitosan-reinforced polymer plants.</li>
-            </ul>
-          </section>
-
-          <div className="bg-emerald-50 dark:bg-emerald-950/30 p-4 rounded-lg border border-emerald-100 dark:border-emerald-900/50 flex items-start gap-3">
-             <AlertTriangle className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-             <p className="text-xs"><strong>Compliance Note:</strong> Transporting agricultural waste across municipal zones requires localized phytosanitary permits not currently detailed in the main Tadweer 2024 guidelines.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SlideDeckView({ darkMode }) {
-  const [isExporting, setIsExporting] = useState(false);
-
-  const handleExport = () => {
-    setIsExporting(true);
-    setTimeout(() => setIsExporting(false), 2000);
-  };
-
-  return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className={`p-6 rounded-xl border flex justify-between items-center ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-        <div>
-          <h2 className="text-lg font-bold flex items-center gap-2"><Presentation className="w-5 h-5 text-emerald-500"/> Slide Deck Generator</h2>
-          <p className={`text-xs mt-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>AI-formatted presentation ready for executive review.</p>
-        </div>
-        <button onClick={handleExport} disabled={isExporting} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white text-sm font-bold transition-colors">
-          {isExporting ? <Loader2 className="w-4 h-4 animate-spin"/> : <Download className="w-4 h-4"/>}
-          {isExporting ? 'Generating PDF...' : 'Export Deck'}
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <SlideCard title="1. Circular Opportunity" content="Transforming Date Palm & Coffee Waste into high-value commercial assets." footer="EcoLens Synthesis" darkMode={darkMode} />
-        <SlideCard title="2. Material Composition" content="Date Fronds: 45% Fiber, 35% Seed. Coffee Grounds: 54% Organic Carbon." footer="Data Analysis" darkMode={darkMode} />
-        <SlideCard title="3. Policy Environment" content="Resolution 12 prohibits incineration. 80% diversion mandate by 2030." footer="Compliance Review" darkMode={darkMode} />
-        <SlideCard title="4. Proposed Architecture" content="Distributed pyrolysis networks linked to central bio-resin compounding facilities." footer="Strategic Roadmap" darkMode={darkMode} />
-      </div>
-    </div>
-  );
-}
-
-function SlideCard({ title, content, footer, darkMode }) {
-  return (
-    <div className={`aspect-video rounded-lg border shadow-sm p-5 flex flex-col justify-between transition-transform hover:scale-[1.02] ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
-      <h3 className={`text-sm font-bold border-b pb-2 ${darkMode ? 'text-emerald-400 border-slate-800' : 'text-emerald-700 border-slate-200'}`}>{title}</h3>
-      <p className={`text-sm flex-1 mt-4 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>{content}</p>
-      <div className={`text-[10px] font-medium uppercase tracking-wider ${darkMode ? 'text-slate-600' : 'text-slate-400'}`}>{footer}</div>
-    </div>
-  );
-}
-
-function DashboardView({ uploadedDocs, pipelineState, progress, darkMode, setUploadedDocs }) {
-  return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {uploadedDocs.length > 0 && (
-        <div className={`flex flex-wrap gap-3 p-4 rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-          <span className={`text-xs font-bold w-full mb-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>ACTIVE DOCUMENTS IN PIPELINE</span>
-          {uploadedDocs.map(doc => (
-            <div key={doc.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-emerald-50 text-emerald-800 border-emerald-100'}`}>
-              <FileText className="w-3.5 h-3.5 text-emerald-500" />
-              {doc.name}
-              <button onClick={() => setUploadedDocs(uploadedDocs.filter(d => d.id !== doc.id))} className="ml-2 opacity-50 hover:opacity-100 text-red-500">
-                <Trash2 className="w-3 h-3" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <section className={`p-6 rounded-2xl border shadow-sm ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-        <div className="flex justify-between items-center mb-8">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-bold flex items-center gap-2"><Leaf className="w-5 h-5 text-emerald-500" /> AI Analysis Pipeline</h2>
-            <span className="text-[10px] uppercase font-bold bg-emerald-500 text-white px-2 py-0.5 rounded-full">Live</span>
-          </div>
-          <div className="text-xs font-medium text-slate-400 flex items-center gap-2">
-            {pipelineState === 'done' ? 'Analysis Complete' : pipelineState !== 'idle' ? <><Loader2 className="w-3.5 h-3.5 animate-spin"/> Processing...</> : 'Awaiting Input'}
-          </div>
-        </div>
-
-        <div className="relative flex justify-between items-center px-12 mb-10">
-          <div className="absolute top-1/2 left-16 right-16 h-0.5 bg-slate-200 dark:bg-slate-800 -z-0 -translate-y-1/2" />
-          <div className="absolute top-1/2 left-16 right-16 h-0.5 bg-emerald-500 -z-0 -translate-y-1/2 transition-all duration-1000 ease-out" style={{ width: `${progress}%`, maxWidth: 'calc(100% - 8rem)' }} />
-          <PipelineNode icon={Search} title="Insight Lens" desc="Material Analysis" status={pipelineState === 'idle' ? 'idle' : 'done'} darkMode={darkMode} />
-          <PipelineNode icon={RefreshCw} title="Opportunity Lens" desc="Circular Mapping" status={pipelineState === 'idle' || pipelineState === 'insight' ? (pipelineState === 'insight' ? 'active' : 'idle') : 'done'} darkMode={darkMode} />
-          <PipelineNode icon={ShieldCheck} title="Compliance Lens" desc="Regulatory Audit" status={pipelineState === 'done' ? 'done' : pipelineState === 'compliance' ? 'active' : 'idle'} darkMode={darkMode} />
-        </div>
-
-        <div className="space-y-3">
-          <StepDetail title="Insight Lens" desc="Extracted key materials, composition, and environmental insights." status={pipelineState === 'idle' ? 'Waiting' : 'Completed'} icon={Search} darkMode={darkMode} />
-          <StepDetail title="Opportunity Lens" desc="Identifying circular economy opportunities and value pathways." status={pipelineState === 'idle' || pipelineState === 'insight' ? 'Waiting' : pipelineState === 'opportunity' ? 'In Progress' : 'Completed'} icon={RefreshCw} darkMode={darkMode} />
-          <StepDetail title="Compliance Lens" desc="Checking regulatory compliance and environmental standards." status={pipelineState === 'done' ? 'Completed' : pipelineState === 'compliance' ? 'In Progress' : 'Pending'} icon={ShieldCheck} darkMode={darkMode} />
-        </div>
-
-        <div className="mt-6 flex items-center gap-4 text-xs font-semibold">
-          <span>Overall Progress</span>
-          <div className="flex-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-            <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${progress}%` }} />
-          </div>
-          <span className="text-emerald-500">{progress}%</span>
-        </div>
-      </section>
-
-      <section>
-        <h3 className={`text-sm font-bold mb-4 ${darkMode ? 'text-white' : 'text-slate-800'}`}>AI Generated Opportunities (Preview)</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {OPPORTUNITIES.map((opp, idx) => (
-            <div key={idx} className={`p-4 rounded-xl border shadow-sm flex flex-col h-full ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-              <div className="flex items-start gap-2 mb-2">
-                <opp.icon className={`w-4 h-4 mt-0.5 ${opp.color}`} />
-                <h4 className="font-bold text-sm leading-tight">{opp.title}</h4>
+                <span className={`text-xs px-2 py-1 rounded-full ${stage.status === 'Completed' ? 'bg-emerald-500/10 text-emerald-500' : stage.status === 'In Progress' ? 'bg-blue-500/10 text-blue-500' : 'bg-slate-500/10 text-slate-500'}`}>
+                  {stage.status}
+                </span>
               </div>
-              <div className="text-xs font-semibold text-slate-500 mb-2">Feasibility: {opp.feasibility}%</div>
-              <p className={`text-xs mb-4 flex-1 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>{opp.desc}</p>
-              <span className={`text-[10px] font-bold px-2 py-1 rounded w-fit ${opp.impact === 'High Impact' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
-                {opp.impact}
+            ))}
+          </div>
+        </div>
+
+        {/* Auditor & Overview */}
+        <div className="space-y-6">
+          <div className={`p-6 rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+            <h3 className="font-semibold mb-4 text-sm flex items-center justify-between">
+              Compliance Auditor
+              <span className="text-xs text-emerald-500 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Live Log</span>
+            </h3>
+            <div className="space-y-3 font-mono text-xs">
+              {[
+                { time: '10:42:11', msg: 'Checking waste classification...', status: 'Compliant', color: 'text-emerald-500' },
+                { time: '10:42:13', msg: 'Verifying environmental permits...', status: 'Warning', color: 'text-yellow-500' },
+                { time: '10:42:15', msg: 'Analyzing emission regulations...', status: 'Compliant', color: 'text-emerald-500' },
+                { time: '10:42:18', msg: 'Checking handling norms...', status: 'Risk', color: 'text-red-500' },
+              ].map((log, i) => (
+                <div key={i} className="flex gap-3">
+                  <span className={darkMode ? 'text-slate-500' : 'text-slate-400'}>{log.time}</span>
+                  <span className={`flex-1 truncate ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{log.msg}</span>
+                  <span className={log.color}>{log.status}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className={`p-6 rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+            <h3 className="font-semibold mb-4 text-sm">Compliance Overview</h3>
+            <div className="flex items-center gap-6">
+              <div className="relative w-24 h-24 rounded-full border-8 border-emerald-500 border-r-yellow-500 border-b-red-500 flex items-center justify-center">
+                <span className="text-xl font-bold">78%</span>
+              </div>
+              <div className="space-y-2 text-sm flex-1">
+                <div className="flex justify-between items-center"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Compliant</span> <span>6</span></div>
+                <div className="flex justify-between items-center"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-yellow-500"></span> Warnings</span> <span>2</span></div>
+                <div className="flex justify-between items-center"><span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500"></span> Risks</span> <span>1</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Opportunities (Mocked for dashboard layout) */}
+      <div className={`p-6 rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+        <h3 className="font-semibold mb-4 text-sm">AI Generated Opportunities (Preview)</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {[
+            { title: 'Biochar Production', val: '92%', tag: 'High Impact', desc: 'High carbon content makes it ideal for biochar.', color: 'emerald' },
+            { title: 'Animal Feed Additive', val: '64%', tag: 'Medium Impact', desc: 'Nutrient profile suitable for livestock feed.', color: 'yellow' },
+            { title: 'Biodegradable Pkg', val: '88%', tag: 'High Impact', desc: 'Fiber content suitable for bioplastic composites.', color: 'emerald' },
+            { title: 'Composting', val: '76%', tag: 'Medium Impact', desc: 'Can be converted into organic compost.', color: 'yellow' },
+          ].map((opp, i) => (
+            <div key={i} className={`p-4 rounded-lg border ${darkMode ? 'border-slate-800 bg-slate-950' : 'border-slate-100 bg-slate-50'}`}>
+              <div className="flex justify-between items-start mb-2">
+                <h4 className="font-medium text-sm text-emerald-500 flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" /> {opp.title}</h4>
+              </div>
+              <div className="text-xs text-slate-500 mb-3">Feasibility: {opp.val}</div>
+              <p className="text-xs mb-4 line-clamp-2 min-h-[32px]">{opp.desc}</p>
+              <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded bg-${opp.color}-500/10 text-${opp.color}-500`}>
+                {opp.tag}
               </span>
             </div>
           ))}
         </div>
-      </section>
-    </div>
-  );
-}
-
-// --- HELPER COMPONENTS ---
-
-function TabButton({ active, onClick, icon: Icon, label, darkMode }) {
-  return (
-    <button onClick={onClick} className={`flex items-center gap-2 px-4 py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${
-      active 
-        ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400' 
-        : `border-transparent hover:border-slate-300 ${darkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-800'}`
-    }`}>
-      <Icon className="w-4 h-4" /> {label}
-    </button>
-  );
-}
-
-function NavItem({ icon: Icon, label, active }) {
-  return (
-    <button className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${active ? 'bg-emerald-500 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-      <Icon className="w-5 h-5" /> {label}
-    </button>
-  );
-}
-
-function PipelineNode({ icon: Icon, title, desc, status, darkMode }) {
-  const getStyles = () => {
-    if (status === 'done') return 'bg-emerald-500 text-white border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)] scale-110';
-    if (status === 'active') return 'bg-white dark:bg-slate-800 border-emerald-500 text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)] scale-110 ring-4 ring-emerald-500/20';
-    return `bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`;
-  };
-  return (
-    <div className="flex flex-col items-center z-10 relative bg-white dark:bg-slate-900 px-2">
-      <div className={`w-14 h-14 rounded-full border-2 flex items-center justify-center transition-all duration-500 ${getStyles()}`}>
-        <Icon className="w-6 h-6" />
       </div>
-      <span className={`mt-3 text-xs font-bold ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>{title}</span>
-      <span className="text-[10px] text-slate-500">{desc}</span>
     </div>
   );
 }
 
-function StepDetail({ title, desc, status, icon: Icon, darkMode }) {
-  const getStatusColor = () => {
-    if (status === 'Completed') return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400';
-    if (status === 'In Progress') return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400';
-    return 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400';
+function ConceptExplorer({ apiKey, context, darkMode, apiStatus }) {
+  const [concepts, setConcepts] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState({});
+
+  const generateConcepts = async () => {
+    if (!apiKey) return alert("API Key required");
+    setLoading(true);
+    const prompt = `Based on the following documents:\n${context}\n\nExtract the core sustainability, material, and policy concepts. Create an interactive taxonomy. Return a JSON object strictly in this format: { "concepts": [ { "id": "c1", "title": "Concept Name", "description": "Brief explanation", "subConcepts": [ "Sub item 1", "Sub item 2" ] } ] }`;
+    
+    try {
+      const result = await fetchGemini(prompt, apiKey, true);
+      const parsed = parseGeminiJSON(result);
+      if (parsed?.concepts) setConcepts(parsed.concepts);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const toggleExpand = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+
   return (
-    <div className={`flex items-center justify-between p-4 rounded-xl border ${darkMode ? 'bg-slate-950/50 border-slate-800/60' : 'bg-slate-50 border-slate-200'}`}>
-      <div className="flex items-start gap-3">
-        <div className={`p-2 rounded-full ${status === 'Completed' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400' : 'bg-slate-200 text-slate-400 dark:bg-slate-800'}`}>
-          <Icon className="w-4 h-4" />
-        </div>
+    <div className="space-y-4 animate-in fade-in duration-500">
+      <div className="flex justify-between items-center">
         <div>
-          <div className="flex items-center gap-2">
-            <h4 className={`text-sm font-bold ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>{title}</h4>
-            <span className={`text-[9px] font-bold px-2 py-0.5 rounded ${getStatusColor()}`}>{status}</span>
-          </div>
-          <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
+          <h2 className="text-xl font-bold">Concept Explorer</h2>
+          <p className="text-sm text-slate-500">A sustainability-focused taxonomy generated from your documents.</p>
         </div>
+        <button 
+          onClick={generateConcepts} 
+          disabled={loading || apiStatus !== 'connected'}
+          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Layers className="w-4 h-4" />}
+          Generate Taxonomy
+        </button>
+      </div>
+
+      {!concepts && !loading && (
+        <div className={`p-12 text-center rounded-xl border border-dashed ${darkMode ? 'border-slate-800 text-slate-500' : 'border-slate-300 text-slate-400'}`}>
+          Select documents and click "Generate Taxonomy" to build an interactive knowledge tree.
+        </div>
+      )}
+
+      {concepts && (
+        <div className="space-y-3">
+          {concepts.map(concept => (
+            <div key={concept.id} className={`rounded-lg border overflow-hidden transition-all ${darkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-white'}`}>
+              <button 
+                onClick={() => toggleExpand(concept.id)}
+                className="w-full text-left px-4 py-3 flex items-center justify-between focus:outline-none"
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`p-1.5 rounded-md ${darkMode ? 'bg-slate-950' : 'bg-slate-100'}`}>
+                    <Info className="w-4 h-4 text-emerald-500" />
+                  </div>
+                  <span className="font-semibold">{concept.title}</span>
+                </div>
+                <Plus className={`w-4 h-4 transition-transform ${expanded[concept.id] ? 'rotate-45' : ''}`} />
+              </button>
+              
+              {expanded[concept.id] && (
+                <div className={`px-4 pb-4 pt-1 border-t ${darkMode ? 'border-slate-800 text-slate-300' : 'border-slate-100 text-slate-600'}`}>
+                  <p className="text-sm mb-3 leading-relaxed">{concept.description}</p>
+                  {concept.subConcepts && concept.subConcepts.length > 0 && (
+                    <div className="pl-4 border-l-2 border-emerald-500/30 space-y-2">
+                      {concept.subConcepts.map((sub, i) => (
+                        <div key={i} className="text-sm flex items-start gap-2">
+                          <span className="text-emerald-500 mt-0.5">•</span> {sub}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SlideGenerator({ apiKey, context, darkMode, apiStatus }) {
+  const [slides, setSlides] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const generateSlides = async () => {
+    if (!apiKey) return;
+    setLoading(true);
+    const prompt = `Based on the context:\n${context}\n\nCreate a 5-slide presentation summarizing the key findings, circular economy opportunities, and compliance risks. Return JSON strictly in this format: { "slides": [ { "title": "Slide Title", "bullets": ["Point 1", "Point 2"], "speakerNotes": "notes" } ] }`;
+    
+    try {
+      const result = await fetchGemini(prompt, apiKey, true);
+      const parsed = parseGeminiJSON(result);
+      if (parsed?.slides) setSlides(parsed.slides);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const exportPDF = () => {
+    window.print(); // Simple fallback for in-browser single-file app
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
+       <div className="flex justify-between items-center print:hidden">
+        <div>
+          <h2 className="text-xl font-bold">Slide Deck Generator</h2>
+          <p className="text-sm text-slate-500">Convert document insights into an executive presentation.</p>
+        </div>
+        <div className="flex gap-2">
+           {slides && (
+            <button onClick={exportPDF} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium flex items-center gap-2">
+              <Download className="w-4 h-4" /> Export PDF
+            </button>
+          )}
+          <button 
+            onClick={generateSlides} 
+            disabled={loading || apiStatus !== 'connected'}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+            Generate Deck
+          </button>
+        </div>
+      </div>
+
+      <div className="grid gap-6 print:block">
+        {!slides && !loading && (
+          <div className={`p-12 text-center rounded-xl border border-dashed ${darkMode ? 'border-slate-800 text-slate-500' : 'border-slate-300 text-slate-400'}`}>
+            Ready to generate a presentation from the selected context.
+          </div>
+        )}
+
+        {slides && slides.map((slide, idx) => (
+          <div key={idx} className={`aspect-video p-10 rounded-xl border flex flex-col justify-center relative shadow-lg print:shadow-none print:border-none print:break-after-page print:h-screen print:w-full print:p-20
+            ${darkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
+            <div className="absolute top-6 left-6 text-emerald-500/50">
+              <Zap className="w-8 h-8" />
+            </div>
+            <span className="absolute bottom-6 right-8 text-sm font-mono text-slate-500">{idx + 1} / {slides.length}</span>
+            
+            <h2 className="text-4xl font-bold mb-8 text-emerald-600 dark:text-emerald-400 leading-tight w-4/5">{slide.title}</h2>
+            <ul className="space-y-4 text-lg list-none ml-4">
+              {slide.bullets.map((bullet, i) => (
+                <li key={i} className="flex items-start gap-3">
+                   <div className="w-2 h-2 rounded-full bg-emerald-500 mt-2.5 shrink-0"></div>
+                   <span className={darkMode ? 'text-slate-300' : 'text-slate-700'}>{bullet}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ResearchBrief({ apiKey, context, darkMode, apiStatus }) {
+  const [brief, setBrief] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const generateBrief = async () => {
+    if (!apiKey) return;
+    setLoading(true);
+    const prompt = `Based on the following document context:\n${context}\n\nWrite a structured, comprehensive AI Research Brief. Include: 1. Executive Summary, 2. Key Findings, 3. Circular Economy Opportunities, 4. Compliance & Regulatory Gaps, 5. Recommended Actions. Use clear markdown formatting.`;
+    
+    try {
+      const result = await fetchGemini(prompt, apiKey, false);
+      setBrief(result);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4 animate-in fade-in duration-500 h-full flex flex-col">
+       <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-xl font-bold">AI Research Brief</h2>
+          <p className="text-sm text-slate-500">Deep-dive structural analysis of the uploaded data.</p>
+        </div>
+        <button 
+          onClick={generateBrief} 
+          disabled={loading || apiStatus !== 'connected'}
+          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+          Generate Brief
+        </button>
+      </div>
+
+      <div className={`flex-1 rounded-xl border p-8 overflow-y-auto ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+        {!brief && !loading && <div className="text-center text-slate-500 py-12">Click generate to create a detailed markdown report.</div>}
+        {loading && <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-emerald-500" /></div>}
+        
+        {brief && (
+          <div className={`prose prose-sm max-w-none ${darkMode ? 'prose-invert prose-emerald' : 'prose-emerald'}`}>
+             {/* Simple Markdown Renderer Fallback for single-file without marked.js */}
+             {brief.split('\n').map((line, i) => {
+               if (line.startsWith('### ')) return <h3 key={i} className="text-lg font-bold mt-6 mb-2">{line.replace('### ', '')}</h3>;
+               if (line.startsWith('## ')) return <h2 key={i} className="text-xl font-bold mt-8 mb-4 border-b pb-2 border-slate-700">{line.replace('## ', '')}</h2>;
+               if (line.startsWith('# ')) return <h1 key={i} className="text-2xl font-bold mt-4 mb-6 text-emerald-500">{line.replace('# ', '')}</h1>;
+               if (line.startsWith('- ') || line.startsWith('* ')) return <li key={i} className="ml-4 list-disc my-1">{line.substring(2)}</li>;
+               if (line.match(/^\d+\.\s/)) return <li key={i} className="ml-4 list-decimal my-1">{line.replace(/^\d+\.\s/, '')}</li>;
+               if (line.startsWith('**') && line.endsWith('**')) return <p key={i} className="font-bold my-2">{line.replace(/\*\*/g, '')}</p>;
+               if (line.trim() === '') return <br key={i} />;
+               // Handle bold text within line
+               const parts = line.split(/(\*\*.*?\*\*)/g);
+               return <p key={i} className="my-2">
+                 {parts.map((part, j) => part.startsWith('**') && part.endsWith('**') ? <strong key={j}>{part.slice(2, -2)}</strong> : part)}
+               </p>;
+             })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PolicyImpact({ apiKey, context, darkMode, apiStatus }) {
+  const [policyInput, setPolicyInput] = useState('');
+  const [result, setResult] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const simulateImpact = async () => {
+    if (!policyInput.trim() || !apiKey) return;
+    setLoading(true);
+    const prompt = `Context: ${context}\n\nScenario: The following policy or regulation change is proposed: "${policyInput}".\n\nTask: Act as the 'Policy Impact Generator'. Analyze how this specific policy change will impact the processes, materials, or operations mentioned in the context documents. Structure the response into: Immediate Impact, Strategic Adjustments Needed, and New Opportunities.`;
+    
+    try {
+      const res = await fetchGemini(prompt, apiKey, false);
+      setResult(res);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="max-w-2xl">
+        <h2 className="text-xl font-bold">Policy Impact Generator</h2>
+        <p className="text-sm text-slate-500 mb-6">"If a policy changes, what happens next?" Simulate regulatory shifts against your uploaded data.</p>
+        
+        <div className={`p-4 rounded-xl border flex flex-col gap-3 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+          <label className="text-sm font-semibold">Describe the Policy Change / Scenario:</label>
+          <textarea 
+            value={policyInput}
+            onChange={(e) => setPolicyInput(e.target.value)}
+            placeholder="e.g., The government imposes a 50% tax on non-biodegradable packaging disposal starting next year."
+            className={`w-full p-3 rounded-lg text-sm min-h-[100px] border focus:outline-none focus:ring-2 focus:ring-emerald-500
+              ${darkMode ? 'bg-slate-950 border-slate-700 text-white placeholder-slate-500' : 'bg-white border-slate-300 text-slate-900'}`}
+          />
+          <button 
+            onClick={simulateImpact} 
+            disabled={loading || apiStatus !== 'connected' || !policyInput.trim()}
+            className="self-end px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
+            Simulate Impact
+          </button>
+        </div>
+      </div>
+
+      {result && (
+        <div className={`p-6 rounded-xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+          <h3 className="font-bold text-lg mb-4 text-emerald-500">Simulation Results</h3>
+          <div className={`text-sm leading-relaxed space-y-4 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+             {result.split('\n').map((line, i) => {
+               if (line.startsWith('**')) return <strong key={i} className="block mt-4 text-base text-white">{line.replace(/\*\*/g, '')}</strong>;
+               if (line.trim() === '') return null;
+               return <p key={i}>{line}</p>;
+             })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function KnowledgeMap({ apiKey, context, darkMode, apiStatus }) {
+  const [graphData, setGraphData] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const generateMap = async () => {
+    if (!apiKey) return;
+    setLoading(true);
+    const prompt = `Context:\n${context}\n\nCreate a knowledge graph of the materials, processes, and products mentioned. Return JSON: { "nodes": [{ "id": "1", "label": "Material X", "group": "material" }, { "id": "2", "label": "Process Y", "group": "process" }], "links": [{ "source": "1", "target": "2", "label": "used in" }] }. Keep it to max 15 nodes for clarity. Valid groups: material, process, product, regulation.`;
+    
+    try {
+      const result = await fetchGemini(prompt, apiKey, true);
+      const parsed = parseGeminiJSON(result);
+      if (parsed?.nodes) {
+        // Simple manual layout calculation for a static SVG representation since we don't have D3
+        const radius = 150;
+        const centerX = 300;
+        const centerY = 200;
+        
+        const positionedNodes = parsed.nodes.map((node, i, arr) => {
+          const angle = (i / arr.length) * 2 * Math.PI;
+          return {
+            ...node,
+            x: centerX + radius * Math.cos(angle),
+            y: centerY + radius * Math.sin(angle)
+          };
+        });
+
+        const positionedLinks = parsed.links.map(link => {
+          const sourceNode = positionedNodes.find(n => n.id === link.source || n.label === link.source);
+          const targetNode = positionedNodes.find(n => n.id === link.target || n.label === link.target);
+          return { ...link, sourceNode, targetNode };
+        }).filter(l => l.sourceNode && l.targetNode);
+
+        setGraphData({ nodes: positionedNodes, links: positionedLinks });
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getColor = (group) => {
+    const colors = {
+      material: '#3b82f6', // blue
+      process: '#8b5cf6', // purple
+      product: '#10b981', // emerald
+      regulation: '#ef4444', // red
+    };
+    return colors[group] || '#64748b';
+  };
+
+  return (
+    <div className="space-y-4 animate-in fade-in duration-500 flex flex-col h-[calc(100vh-8rem)]">
+      <div className="flex justify-between items-center shrink-0">
+        <div>
+          <h2 className="text-xl font-bold">Knowledge Map</h2>
+          <p className="text-sm text-slate-500">Visual network of relationships extracted from your documents.</p>
+        </div>
+        <button 
+          onClick={generateMap} 
+          disabled={loading || apiStatus !== 'connected'}
+          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Network className="w-4 h-4" />}
+          Build Network
+        </button>
+      </div>
+
+      <div className={`flex-1 rounded-xl border overflow-hidden flex items-center justify-center relative ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+        {!graphData && !loading && <span className="text-slate-500">Click build to generate the interactive knowledge graph.</span>}
+        {loading && <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />}
+        
+        {graphData && (
+          <svg className="w-full h-full min-h-[400px]" viewBox="0 0 600 400">
+            {/* Links */}
+            {graphData.links.map((link, i) => (
+              <g key={`link-${i}`}>
+                <line 
+                  x1={link.sourceNode.x} y1={link.sourceNode.y} 
+                  x2={link.targetNode.x} y2={link.targetNode.y} 
+                  stroke={darkMode ? '#334155' : '#cbd5e1'} 
+                  strokeWidth="2" 
+                />
+                <text 
+                  x={(link.sourceNode.x + link.targetNode.x) / 2} 
+                  y={(link.sourceNode.y + link.targetNode.y) / 2 - 5}
+                  fill={darkMode ? '#94a3b8' : '#64748b'}
+                  fontSize="10"
+                  textAnchor="middle"
+                >
+                  {link.label}
+                </text>
+              </g>
+            ))}
+            
+            {/* Nodes */}
+            {graphData.nodes.map((node) => (
+              <g key={`node-${node.id}`} transform={`translate(${node.x}, ${node.y})`} className="cursor-pointer transition-transform hover:scale-110">
+                <circle r="16" fill={getColor(node.group)} opacity="0.9" />
+                <circle r="16" fill="none" stroke={darkMode ? '#0f172a' : '#ffffff'} strokeWidth="2" />
+                <text 
+                  y="28" 
+                  textAnchor="middle" 
+                  fill={darkMode ? '#f8fafc' : '#0f172a'} 
+                  fontSize="12" 
+                  fontWeight="bold"
+                  className="select-none"
+                >
+                  {node.label}
+                </text>
+              </g>
+            ))}
+          </svg>
+        )}
+        
+        {graphData && (
+          <div className={`absolute bottom-4 left-4 p-3 rounded-lg border text-xs flex gap-4 ${darkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-white/80 border-slate-200'}`}>
+             <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-blue-500"></div> Material</div>
+             <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-purple-500"></div> Process</div>
+             <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-emerald-500"></div> Product</div>
+             <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-500"></div> Regulation</div>
+          </div>
+        )}
       </div>
     </div>
   );
