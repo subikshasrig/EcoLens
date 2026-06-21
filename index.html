@@ -595,7 +595,7 @@
                 throw new Error("API Key is missing. Please enter your Gemini API Key.");
             }
 
-            const model = "gemini-2.5-flash-preview-09-2025";
+            const model = "gemini-2.0-flash"; 
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${State.apiKey}`;
 
             const payload = {
