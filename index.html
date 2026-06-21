@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EcoLens - AI Research & Compliance Copilot</title>
+    <title>EcoLens - AI-Powered Research & Compliance Copilot</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -14,15 +14,13 @@
                 extend: {
                     colors: {
                         eco: {
-                            50: '#f0fdf4',
-                            100: '#dcfce7',
-                            500: '#22c55e',
-                            600: '#16a34a',
-                            700: '#15803d',
-                            800: '#166534',
-                            900: '#14532d',
-                            950: '#052e16',
-                            sidebar: '#0b1b15' // Dark green from the image
+                            50: '#ecfdf5',
+                            100: '#d1fae5',
+                            500: '#10b981',
+                            600: '#059669',
+                            700: '#047857',
+                            900: '#064e3b',
+                            950: '#022c22',
                         }
                     }
                 }
@@ -30,138 +28,593 @@
         }
     </script>
 
-    <!-- React & ReactDOM -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Babel for JSX (Pinned to stable v7 to prevent unpkg v8 alpha bugs) -->
-    <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
-    
-    <!-- PDF.js for text extraction -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    
-    <!-- jsPDF for exporting slides -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
-    <!-- Marked for Markdown rendering -->
+    <!-- Marked.js for Markdown parsing -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <!-- DOMPurify for sanitizing marked output -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.3/purify.min.js"></script>
+
+    <!-- PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+
+    <!-- Vis-Network for Knowledge Map -->
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js"></script>
+
+    <!-- html2pdf for Slide Deck export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <style>
-        /* Custom Scrollbar for a cleaner look */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         .dark ::-webkit-scrollbar-thumb { background: #475569; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         
-        /* Node Map Canvas */
-        #knowledge-canvas { cursor: grab; }
-        #knowledge-canvas:active { cursor: grabbing; }
+        .markdown-body h1 { font-size: 1.5em; font-weight: bold; margin-bottom: 0.5em; margin-top: 1em; }
+        .markdown-body h2 { font-size: 1.25em; font-weight: bold; margin-bottom: 0.5em; margin-top: 1em; }
+        .markdown-body h3 { font-size: 1.1em; font-weight: bold; margin-bottom: 0.5em; margin-top: 1em; }
+        .markdown-body p { margin-bottom: 1em; }
+        .markdown-body ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 1em; }
+        .markdown-body ol { list-style-type: decimal; padding-left: 1.5em; margin-bottom: 1em; }
+        .markdown-body strong { font-weight: 600; color: #059669; }
+        .dark .markdown-body strong { color: #10b981; }
+        .markdown-body blockquote { border-left: 4px solid #e2e8f0; padding-left: 1em; color: #64748b; margin-bottom: 1em; }
+        .dark .markdown-body blockquote { border-left-color: #334155; color: #94a3b8; }
 
-        .spinner {
-            border: 3px solid rgba(0,0,0,0.1);
-            width: 24px; height: 24px; border-radius: 50%;
-            border-left-color: #22c55e;
-            animation: spin 1s linear infinite;
+        /* Glowing indicator */
+        .glow-green {
+            box-shadow: 0 0 10px 2px rgba(16, 185, 129, 0.6);
         }
-        .dark .spinner { border: 3px solid rgba(255,255,255,0.1); border-left-color: #22c55e; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Tree Explorer Styles */
+        details > summary {
+            list-style: none;
+        }
+        details > summary::-webkit-details-marker {
+            display: none;
+        }
         
-        .pulse-dot {
-            width: 8px; height: 8px; background-color: #22c55e; border-radius: 50%;
-            box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
-            animation: pulse 1.5s infinite;
-        }
-        @keyframes pulse {
-            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
-            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
-            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        #network-container canvas {
+            outline: none;
         }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors duration-200 overflow-hidden">
-    <div id="root"></div>
+<body class="bg-gray-50 text-slate-800 dark:bg-slate-950 dark:text-slate-200 h-screen flex flex-col font-sans transition-colors duration-200 overflow-hidden">
 
-    <script type="text/babel">
-        // --- Setup PDF.js Worker ---
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    <!-- Top Menu Bar -->
+    <header class="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 h-16 flex items-center justify-between px-4 shrink-0 z-10 relative">
+        <div class="flex items-center gap-6 h-full">
+            <div class="flex items-center gap-2 font-bold text-xl text-eco-600 dark:text-eco-500">
+                <i class="fa-solid fa-leaf"></i> EcoLens
+            </div>
+            
+            <!-- Navigation Tabs -->
+            <nav class="hidden md:flex h-full" id="main-nav">
+                <button onclick="switchTab('chat')" class="nav-tab active h-full px-4 border-b-2 border-eco-500 text-eco-600 dark:text-eco-400 font-medium hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2" data-tab="chat">
+                    <i class="fa-solid fa-comments"></i> Chat Copilot
+                </button>
+                <button onclick="switchTab('explorer')" class="nav-tab h-full px-4 border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2" data-tab="explorer">
+                    <i class="fa-solid fa-network-wired"></i> Concept Explorer
+                </button>
+                <button onclick="switchTab('slides')" class="nav-tab h-full px-4 border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2" data-tab="slides">
+                    <i class="fa-solid fa-person-chalkboard"></i> Slide Deck
+                </button>
+                <button onclick="switchTab('brief')" class="nav-tab h-full px-4 border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2" data-tab="brief">
+                    <i class="fa-solid fa-file-invoice"></i> Research Brief
+                </button>
+                <button onclick="switchTab('map')" class="nav-tab h-full px-4 border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2" data-tab="map">
+                    <i class="fa-solid fa-diagram-project"></i> Knowledge Map
+                </button>
+                <button onclick="switchTab('policy')" class="nav-tab h-full px-4 border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2" data-tab="policy">
+                    <i class="fa-solid fa-scale-balanced"></i> Policy Impact
+                </button>
+            </nav>
+        </div>
 
-        // --- Icons (Inline SVGs for reliability) ---
-        const Icons = {
-            Leaf: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>,
-            Upload: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
-            FileText: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>,
-            Moon: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>,
-            Sun: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>,
-            Send: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>,
-            CheckCircle: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
-            AlertCircle: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
-            Key: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/></svg>,
-            Download: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
-            Bot: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>,
-            Search: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
-            TrendingUp: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
-            Shield: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
-            Settings: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
-            ChevronRight: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>,
-            ChevronDown: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        <div class="flex items-center gap-4">
+            <!-- API Key Input -->
+            <div class="relative flex items-center">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <i class="fa-solid fa-key text-gray-400"></i>
+                </div>
+                <input type="password" id="api-key-input" placeholder="Gemini API Key" 
+                    class="pl-10 pr-10 py-1.5 border border-gray-300 dark:border-slate-700 rounded-md bg-gray-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-eco-500 focus:border-eco-500 outline-none w-48 transition-all dark:text-white"
+                    onchange="updateApiKey(this.value)">
+                <div class="absolute inset-y-0 right-0 pr-3 flex items-center">
+                    <div id="api-status-indicator" class="w-2.5 h-2.5 rounded-full bg-gray-400 transition-all duration-300" title="API Key Status"></div>
+                </div>
+            </div>
+            
+            <!-- Dark Mode Toggle -->
+            <button onclick="toggleDarkMode()" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-600 dark:text-gray-300 transition-colors focus:outline-none">
+                <i class="fa-solid fa-moon dark:hidden text-lg"></i>
+                <i class="fa-solid fa-sun hidden dark:block text-lg"></i>
+            </button>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Sidebar: Upload & Selection -->
+        <aside class="w-72 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 flex flex-col shrink-0">
+            <div class="p-4 border-b border-gray-200 dark:border-slate-800">
+                <h2 class="font-semibold text-lg mb-2 flex items-center gap-2">
+                    <i class="fa-regular fa-folder-open text-eco-500"></i> Document Library
+                </h2>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Upload PDFs to build context for EcoLens.</p>
+                
+                <!-- Upload Area -->
+                <div id="drop-zone" class="border-2 border-dashed border-gray-300 dark:border-slate-700 rounded-lg p-6 text-center hover:border-eco-500 dark:hover:border-eco-500 transition-colors cursor-pointer bg-gray-50 dark:bg-slate-800/50" onclick="document.getElementById('file-input').click()">
+                    <i class="fa-solid fa-cloud-arrow-up text-3xl text-gray-400 dark:text-gray-500 mb-2"></i>
+                    <p class="text-sm font-medium">Drag & drop PDFs here</p>
+                    <p class="text-xs text-gray-500 mt-1">or click to browse</p>
+                    <input type="file" id="file-input" multiple accept="application/pdf" class="hidden" onchange="handleFileSelect(event)">
+                </div>
+                
+                <div id="upload-progress" class="hidden mt-3">
+                    <div class="flex justify-between text-xs mb-1">
+                        <span id="upload-filename" class="truncate max-w-[180px]">Processing...</span>
+                        <span id="upload-percent">0%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-1.5">
+                        <div id="upload-bar" class="bg-eco-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Document List -->
+            <div class="flex-1 overflow-y-auto p-4">
+                <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Context Sources</h3>
+                <div id="document-list" class="space-y-2">
+                    <!-- Documents will be injected here -->
+                    <div class="text-sm text-gray-500 dark:text-gray-400 text-center py-4 italic" id="empty-docs-msg">
+                        No documents uploaded yet.
+                    </div>
+                </div>
+            </div>
+            
+            <div class="p-4 border-t border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/30">
+                <div class="flex items-center justify-between text-xs text-gray-500">
+                    <span>Active Context:</span>
+                    <span id="active-context-count" class="font-bold text-eco-600 dark:text-eco-400 bg-eco-100 dark:bg-eco-900/50 px-2 py-0.5 rounded-full">0 docs</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 flex flex-col bg-gray-50 dark:bg-slate-950 relative overflow-hidden">
+            
+            <!-- Global Loading Overlay for Tools -->
+            <div id="tool-loading-overlay" class="hidden absolute inset-0 bg-white/80 dark:bg-slate-950/80 z-50 flex flex-col items-center justify-center backdrop-blur-sm">
+                <div class="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-eco-500 mb-4"></div>
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-white" id="tool-loading-text">Analyzing Documents...</h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">EcoLens AI is processing the selected context.</p>
+            </div>
+
+            <!-- VIEW 1: Chat Copilot -->
+            <div id="view-chat" class="tab-view flex-1 flex flex-col h-full">
+                <!-- Messages -->
+                <div id="chat-messages" class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
+                    
+                    <!-- Welcome Message -->
+                    <div class="flex gap-4">
+                        <div class="w-10 h-10 rounded-full bg-eco-100 dark:bg-eco-900 flex items-center justify-center shrink-0 border border-eco-200 dark:border-eco-700">
+                            <i class="fa-solid fa-leaf text-eco-600 dark:text-eco-400"></i>
+                        </div>
+                        <div class="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-4 rounded-2xl rounded-tl-none shadow-sm max-w-[85%]">
+                            <h3 class="font-semibold text-gray-800 dark:text-gray-200 mb-2">Welcome to EcoLens Copilot</h3>
+                            <p class="text-gray-600 dark:text-gray-400 text-sm leading-relaxed mb-3">
+                                I am your AI-powered research and compliance assistant. I process environmental data, sustainability reports, and waste datasheets through three analytical layers:
+                            </p>
+                            <div class="flex flex-wrap gap-2 mb-3">
+                                <span class="text-xs bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-1 rounded-md border border-blue-200 dark:border-blue-800"><i class="fa-solid fa-magnifying-glass mr-1"></i> Insight Lens</span>
+                                <span class="text-xs bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 px-2 py-1 rounded-md border border-purple-200 dark:border-purple-800"><i class="fa-solid fa-recycle mr-1"></i> Opportunity Lens</span>
+                                <span class="text-xs bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300 px-2 py-1 rounded-md border border-red-200 dark:border-red-800"><i class="fa-solid fa-shield-halved mr-1"></i> Compliance Lens</span>
+                            </div>
+                            <p class="text-gray-600 dark:text-gray-400 text-sm font-medium">
+                                Please upload and select documents in the sidebar, then ask me anything.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Input Area -->
+                <div class="p-4 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 shrink-0">
+                    <form id="chat-form" onsubmit="handleChatSubmit(event)" class="max-w-4xl mx-auto relative">
+                        <textarea id="chat-input" rows="2" placeholder="Ask about materials, compliance risks, or circular economy opportunities..." 
+                            class="w-full bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-xl pl-4 pr-14 py-3 focus:outline-none focus:ring-2 focus:ring-eco-500 focus:border-transparent resize-none text-sm dark:text-white"
+                            onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleChatSubmit(event); }"></textarea>
+                        <button type="submit" id="chat-submit-btn" class="absolute right-3 bottom-3 w-8 h-8 bg-eco-600 hover:bg-eco-700 text-white rounded-lg flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i class="fa-solid fa-paper-plane text-sm"></i>
+                        </button>
+                    </form>
+                    <div class="text-center mt-2">
+                        <span class="text-[10px] text-gray-400">Powered by Gemini 2.5 Flash</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 2: Concept Explorer -->
+            <div id="view-explorer" class="tab-view hidden h-full flex flex-col p-6 overflow-hidden">
+                <div class="flex justify-between items-center mb-6 shrink-0">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800 dark:text-white">Interactive Concept Explorer</h2>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">A structured, hierarchical view of knowledge extracted from your documents.</p>
+                    </div>
+                    <button onclick="generateToolContent('explorer')" class="bg-eco-600 hover:bg-eco-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Explorer
+                    </button>
+                </div>
+                <div class="flex-1 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-6 overflow-y-auto shadow-sm" id="explorer-content">
+                    <div class="h-full flex flex-col items-center justify-center text-gray-400">
+                        <i class="fa-solid fa-network-wired text-4xl mb-3"></i>
+                        <p>Click "Generate Explorer" to build a knowledge tree from selected documents.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 3: Slide Deck Generator -->
+            <div id="view-slides" class="tab-view hidden h-full flex flex-col p-6 overflow-hidden">
+                <div class="flex justify-between items-center mb-6 shrink-0">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800 dark:text-white">Beamer / Slide Deck Generator</h2>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Auto-generate a presentation outline from your sustainability data.</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="exportSlidesPdf()" id="btn-export-slides" class="hidden bg-gray-200 hover:bg-gray-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-800 dark:text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors items-center gap-2">
+                            <i class="fa-solid fa-file-pdf text-red-500"></i> Export PDF
+                        </button>
+                        <button onclick="generateToolContent('slides')" class="bg-eco-600 hover:bg-eco-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Slides
+                        </button>
+                    </div>
+                </div>
+                <div class="flex-1 overflow-y-auto" id="slides-container-wrapper">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="slides-content">
+                        <!-- Slides will be rendered here -->
+                        <div class="col-span-full h-64 border-2 border-dashed border-gray-300 dark:border-slate-700 rounded-xl flex flex-col items-center justify-center text-gray-400">
+                            <i class="fa-solid fa-person-chalkboard text-4xl mb-3"></i>
+                            <p>Click "Generate Slides" to create a deck from selected documents.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 4: Research Brief -->
+            <div id="view-brief" class="tab-view hidden h-full flex flex-col p-6 overflow-hidden">
+                <div class="flex justify-between items-center mb-6 shrink-0">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800 dark:text-white">AI Research Brief</h2>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Comprehensive executive summary and action plan.</p>
+                    </div>
+                    <button onclick="generateToolContent('brief')" class="bg-eco-600 hover:bg-eco-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Brief
+                    </button>
+                </div>
+                <div class="flex-1 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-8 overflow-y-auto shadow-sm">
+                    <div id="brief-content" class="markdown-body text-gray-800 dark:text-gray-200 max-w-4xl mx-auto">
+                        <div class="h-full flex flex-col items-center justify-center text-gray-400 mt-20">
+                            <i class="fa-solid fa-file-invoice text-4xl mb-3"></i>
+                            <p>Click "Generate Brief" to synthesize a report from selected documents.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 5: Knowledge Map -->
+            <div id="view-map" class="tab-view hidden h-full flex flex-col p-6 overflow-hidden">
+                <div class="flex justify-between items-center mb-6 shrink-0">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800 dark:text-white">Visual Knowledge Map</h2>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Entity and relationship network extracted from context.</p>
+                    </div>
+                    <button onclick="generateToolContent('map')" class="bg-eco-600 hover:bg-eco-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Map
+                    </button>
+                </div>
+                <div class="flex-1 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm relative">
+                    <div id="network-container" class="w-full h-full bg-slate-50 dark:bg-slate-950">
+                        <div id="map-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 pointer-events-none">
+                            <i class="fa-solid fa-diagram-project text-4xl mb-3"></i>
+                            <p>Click "Generate Map" to visualize connections in your documents.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 6: Policy Impact -->
+            <div id="view-policy" class="tab-view hidden h-full flex flex-col p-6 overflow-hidden">
+                <div class="flex flex-col mb-6 shrink-0 bg-white dark:bg-slate-900 p-6 rounded-xl border border-gray-200 dark:border-slate-800 shadow-sm">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800 dark:text-white mb-2">Policy Impact Simulator</h2>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">"If a policy changes, what happens next?" Simulate scenarios against your data.</p>
+                    </div>
+                    <div class="flex gap-3">
+                        <input type="text" id="policy-scenario-input" placeholder="e.g., What if a new tax is applied to non-recyclable packaging?" 
+                            class="flex-1 bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-eco-500 text-sm dark:text-white"
+                            onkeydown="if(event.key === 'Enter') generateToolContent('policy')">
+                        <button onclick="generateToolContent('policy')" class="bg-eco-600 hover:bg-eco-700 text-white px-6 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2 whitespace-nowrap">
+                            <i class="fa-solid fa-flask"></i> Simulate Impact
+                        </button>
+                    </div>
+                </div>
+                <div class="flex-1 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-8 overflow-y-auto shadow-sm">
+                    <div id="policy-content" class="markdown-body text-gray-800 dark:text-gray-200 max-w-4xl mx-auto">
+                        <div class="h-full flex flex-col items-center justify-center text-gray-400 mt-10">
+                            <i class="fa-solid fa-scale-balanced text-4xl mb-3"></i>
+                            <p>Enter a hypothetical policy change above to analyze its impact.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Application Logic -->
+    <script>
+        // --- State Management ---
+        const State = {
+            apiKey: '',
+            documents: [], // { id, name, fullText, pages: [{pageNum, text}] }
+            selectedDocIds: new Set(),
+            chatHistory: [],
+            isDarkMode: document.documentElement.classList.contains('dark'),
+            networkInstance: null,
+            isGenerating: false
         };
 
-        // --- Utility Functions ---
-        async function extractTextFromPDF(file) {
-            try {
-                const arrayBuffer = await file.arrayBuffer();
-                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                let fullText = "";
-                
-                // Limit to first 15 pages to prevent massive token usage in browser demo
-                const numPagesToExtract = Math.min(pdf.numPages, 15); 
-                
-                for (let i = 1; i <= numPagesToExtract; i++) {
-                    const page = await pdf.getPage(i);
-                    const textContent = await page.getTextContent();
-                    const pageText = textContent.items.map(item => item.str).join(' ');
-                    fullText += `[Page ${i}] ` + pageText + "\n\n";
-                }
-                return { 
-                    id: Date.now() + Math.random().toString(36).substr(2, 9),
-                    name: file.name, 
-                    size: (file.size / 1024 / 1024).toFixed(2) + ' MB',
-                    text: fullText,
-                    selected: true,
-                    pagesProcessed: numPagesToExtract
-                };
-            } catch (error) {
-                console.error("Error reading PDF:", error);
-                throw error;
+        // Attempt to get API key from environment if available (fallback)
+        const envApiKey = typeof apiKey !== 'undefined' ? apiKey : '';
+        if (envApiKey) {
+            State.apiKey = envApiKey;
+            document.getElementById('api-key-input').value = envApiKey;
+            updateApiIndicator();
+        }
+
+        // --- Core Functions ---
+
+        function toggleDarkMode() {
+            State.isDarkMode = !State.isDarkMode;
+            if (State.isDarkMode) {
+                document.documentElement.classList.add('dark');
+                document.documentElement.classList.remove('light');
+            } else {
+                document.documentElement.classList.add('light');
+                document.documentElement.classList.remove('dark');
             }
         }
 
-        async function callGemini(prompt, apiKey, format = "text", systemInst = "") {
-            if (!apiKey) throw new Error("API Key required");
+        function updateApiKey(val) {
+            State.apiKey = val.trim();
+            updateApiIndicator();
+        }
+
+        function updateApiIndicator() {
+            const indicator = document.getElementById('api-status-indicator');
+            if (State.apiKey.length > 10) {
+                indicator.classList.remove('bg-gray-400', 'bg-red-500');
+                indicator.classList.add('bg-eco-500', 'glow-green');
+            } else {
+                indicator.classList.remove('bg-eco-500', 'glow-green', 'bg-red-500');
+                indicator.classList.add('bg-gray-400');
+            }
+        }
+
+        function switchTab(tabId) {
+            // Update nav buttons
+            document.querySelectorAll('.nav-tab').forEach(btn => {
+                if (btn.dataset.tab === tabId) {
+                    btn.classList.add('border-eco-500', 'text-eco-600', 'dark:text-eco-400');
+                    btn.classList.remove('border-transparent', 'text-gray-500', 'dark:text-gray-400');
+                } else {
+                    btn.classList.remove('border-eco-500', 'text-eco-600', 'dark:text-eco-400');
+                    btn.classList.add('border-transparent', 'text-gray-500', 'dark:text-gray-400');
+                }
+            });
+
+            // Update views
+            document.querySelectorAll('.tab-view').forEach(view => {
+                view.classList.add('hidden');
+            });
+            document.getElementById(`view-${tabId}`).classList.remove('hidden');
+
+            // Specific logic on tab switch
+            if (tabId === 'map' && State.networkInstance) {
+                State.networkInstance.redraw();
+            }
+        }
+
+        // --- PDF Processing Logic ---
+
+        const dropZone = document.getElementById('drop-zone');
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-eco-500', 'bg-eco-50', 'dark:bg-eco-900/20');
+        });
+        
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-eco-500', 'bg-eco-50', 'dark:bg-eco-900/20');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-eco-500', 'bg-eco-50', 'dark:bg-eco-900/20');
+            if (e.dataTransfer.files.length > 0) {
+                processFiles(e.dataTransfer.files);
+            }
+        });
+
+        function handleFileSelect(e) {
+            if (e.target.files.length > 0) {
+                processFiles(e.target.files);
+            }
+            e.target.value = ''; // Reset input
+        }
+
+        async function processFiles(files) {
+            const progressDiv = document.getElementById('upload-progress');
+            const bar = document.getElementById('upload-bar');
+            const percentText = document.getElementById('upload-percent');
+            const nameText = document.getElementById('upload-filename');
             
-            // Exponential backoff logic
-            const maxRetries = 5;
-            let delay = 1000;
-            
-            for (let i = 0; i < maxRetries; i++) {
+            progressDiv.classList.remove('hidden');
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                if (file.type !== 'application/pdf') {
+                    alert(`Skipping ${file.name}: Not a PDF file.`);
+                    continue;
+                }
+
+                nameText.textContent = file.name;
+                bar.style.width = '10%';
+                percentText.textContent = '10%';
+
                 try {
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview:generateContent?key=${apiKey}`;
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                     
-                    const payload = {
-                        contents: [{ parts: [{ text: prompt }] }],
+                    let fullText = '';
+                    let pages = [];
+                    const totalPages = pdf.numPages;
+
+                    for (let j = 1; j <= totalPages; j++) {
+                        const page = await pdf.getPage(j);
+                        const textContent = await page.getTextContent();
+                        const pageText = textContent.items.map(item => item.str).join(' ');
+                        
+                        fullText += pageText + '\n\n';
+                        pages.push({ pageNum: j, text: pageText });
+
+                        const progress = 10 + Math.floor((j / totalPages) * 90);
+                        bar.style.width = `${progress}%`;
+                        percentText.textContent = `${progress}%`;
+                    }
+
+                    const docId = 'doc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                    const newDoc = {
+                        id: docId,
+                        name: file.name,
+                        fullText: fullText,
+                        pages: pages,
+                        size: (file.size / (1024*1024)).toFixed(2) + ' MB'
                     };
-                    
-                    if (systemInst) {
-                        payload.systemInstruction = { parts: [{ text: systemInst }] };
-                    }
 
-                    if (format === "json") {
-                        payload.generationConfig = { 
-                            responseMimeType: "application/json" 
-                        };
-                    }
+                    State.documents.push(newDoc);
+                    State.selectedDocIds.add(docId); // Auto select
 
+                } catch (error) {
+                    console.error("Error parsing PDF:", error);
+                    alert(`Error parsing ${file.name}`);
+                }
+            }
+
+            setTimeout(() => {
+                progressDiv.classList.add('hidden');
+                bar.style.width = '0%';
+                renderDocumentList();
+            }, 500);
+        }
+
+        function renderDocumentList() {
+            const listEl = document.getElementById('document-list');
+            const emptyMsg = document.getElementById('empty-docs-msg');
+            
+            if (State.documents.length === 0) {
+                emptyMsg.style.display = 'block';
+                listEl.innerHTML = '';
+                listEl.appendChild(emptyMsg);
+                document.getElementById('active-context-count').textContent = '0 docs';
+                return;
+            }
+
+            emptyMsg.style.display = 'none';
+            listEl.innerHTML = '';
+
+            State.documents.forEach(doc => {
+                const isSelected = State.selectedDocIds.has(doc.id);
+                const div = document.createElement('div');
+                div.className = `flex items-center gap-3 p-2 rounded-lg border cursor-pointer transition-colors ${isSelected ? 'bg-eco-50 border-eco-200 dark:bg-eco-900/20 dark:border-eco-800' : 'bg-white border-gray-200 hover:bg-gray-50 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700'}`;
+                div.onclick = (e) => {
+                    if (e.target.tagName !== 'INPUT') toggleDocumentSelection(doc.id);
+                };
+
+                div.innerHTML = `
+                    <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleDocumentSelection('${doc.id}')" class="w-4 h-4 text-eco-600 rounded border-gray-300 focus:ring-eco-500 cursor-pointer">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate" title="${doc.name}">${doc.name}</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">${doc.pages.length} pages • ${doc.size}</p>
+                    </div>
+                `;
+                listEl.appendChild(div);
+            });
+
+            document.getElementById('active-context-count').textContent = `${State.selectedDocIds.size} docs`;
+        }
+
+        function toggleDocumentSelection(docId) {
+            if (State.selectedDocIds.has(docId)) {
+                State.selectedDocIds.delete(docId);
+            } else {
+                State.selectedDocIds.add(docId);
+            }
+            renderDocumentList();
+        }
+
+        function getSelectedContext() {
+            if (State.selectedDocIds.size === 0) return null;
+            
+            let contextStr = "--- CONTEXT DOCUMENTS ---\n\n";
+            State.documents.forEach(doc => {
+                if (State.selectedDocIds.has(doc.id)) {
+                    contextStr += `[DOCUMENT: ${doc.name}]\n`;
+                    // Limit context to prevent massive token overflow. Simple approach: take first few pages or chunk.
+                    // For this prototype, we'll try to include as much as possible, Gemini 2.5 Flash has a large window.
+                    // But to be safe, truncate if excessively large.
+                    let docText = doc.fullText.substring(0, 100000); // Rough limit
+                    contextStr += docText + "\n\n";
+                }
+            });
+            contextStr += "--- END CONTEXT ---\n";
+            return contextStr;
+        }
+
+        // --- Gemini API Call with Retry Logic ---
+
+        async function callGemini(prompt, systemInstruction = null, isJson = false) {
+            if (!State.apiKey) {
+                throw new Error("API Key is missing. Please enter your Gemini API Key.");
+            }
+
+            const model = "gemini-2.5-flash-preview-09-2025";
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${State.apiKey}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }]
+            };
+
+            if (systemInstruction) {
+                payload.systemInstruction = { parts: [{ text: systemInstruction }] };
+            }
+
+            if (isJson) {
+                payload.generationConfig = { responseMimeType: "application/json" };
+            }
+
+            const maxRetries = 5;
+            const baseDelay = 1000;
+
+            for (let attempt = 0; attempt <= maxRetries; attempt++) {
+                try {
                     const response = await fetch(url, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -169,905 +622,430 @@
                     });
 
                     if (!response.ok) {
-                        throw new Error(`API Error: ${response.status}`);
-                    }
-
-                    const data = await response.json();
-                    const textContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
-                    
-                    if (!textContent) throw new Error("Empty response from API");
-
-                    if (format === "json") {
-                        try {
-                            return JSON.parse(textContent);
-                        } catch (e) {
-                            console.error("Failed to parse JSON response:", textContent);
-                            // Attempt to sanitize if markdown block is present
-                            const cleaned = textContent.replace(/```json\n?|\n?```/g, '').trim();
-                            return JSON.parse(cleaned);
+                        const errText = await response.text();
+                        if (response.status === 400 && errText.includes("API key not valid")) {
+                           document.getElementById('api-status-indicator').classList.add('bg-red-500');
+                           document.getElementById('api-status-indicator').classList.remove('bg-eco-500', 'glow-green');
+                           throw new Error("Invalid API Key provided.");
                         }
+                        throw new Error(`HTTP error! status: ${response.status} - ${errText}`);
                     }
-                    return textContent;
+
+                    const result = await response.json();
+                    
+                    if (!result.candidates || result.candidates.length === 0) {
+                        throw new Error("No response candidates received from API.");
+                    }
+
+                    let textResult = result.candidates[0].content.parts[0].text;
+                    
+                    // If JSON was requested, try to clean it just in case the model wrapped it
+                    if (isJson) {
+                         textResult = textResult.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+                    }
+                    return textResult;
+
                 } catch (error) {
-                    if (i === maxRetries - 1) throw error;
+                    if (attempt === maxRetries || error.message.includes("Invalid API Key")) {
+                        throw error;
+                    }
+                    const delay = baseDelay * Math.pow(2, attempt);
                     await new Promise(r => setTimeout(r, delay));
-                    delay *= 2;
                 }
             }
         }
 
-        // Context builder
-        function getSelectedContext(documents) {
-            const selectedDocs = documents.filter(d => d.selected);
-            if (selectedDocs.length === 0) return "No documents provided.";
+        // --- Chat Logic ---
+
+        const EcoLensPersona = `You are EcoLens, an advanced AI-powered research and compliance assistant. Your core function is to transform environmental data, sustainability reports, and waste datasheets into actionable circular economy opportunities. 
+You operate through three integrated lenses:
+1. Insight Lens: Extract and summarize key material compositions, waste generation, and environmental metrics.
+2. Opportunity Lens: Identify high-value circular economy pathways (e.g., reuse, biochar, compost, upcycling) for identified waste streams.
+3. Compliance Lens: Evaluate risks and check alignment with environmental regulations based on the data.
+
+Rules:
+- ALWAYS base your answers strictly on the provided Context Documents.
+- When you use information from the context, provide a citation format like [Doc: Filename].
+- If the user asks something completely unrelated to the context, politely remind them to ask about the uploaded documents, but you may provide a brief general answer if helpful.
+- Structure your responses cleanly using Markdown, bolding key terms, and using lists for readability.`;
+
+        async function handleChatSubmit(e) {
+            e.preventDefault();
+            const inputEl = document.getElementById('chat-input');
+            const message = inputEl.value.trim();
+            if (!message) return;
+
+            const submitBtn = document.getElementById('chat-submit-btn');
+            inputEl.value = '';
+            inputEl.style.height = 'auto'; // reset height
+            submitBtn.disabled = true;
+
+            appendMessage('user', message);
             
-            let context = "CONTEXT FROM UPLOADED DOCUMENTS:\n\n";
-            selectedDocs.forEach(doc => {
-                context += `--- DOCUMENT: ${doc.name} ---\n`;
-                // Truncate text slightly to avoid huge payloads in demo, keep ~30k chars per doc max
-                context += doc.text.substring(0, 30000) + (doc.text.length > 30000 ? "...\n[Text Truncated]" : "") + "\n\n";
-            });
-            return context;
-        }
-
-
-        // --- React Components ---
-
-        const DashboardView = ({ documents, apiKey, dashboardData, setDashboardData }) => {
-            const [isAnalyzing, setIsAnalyzing] = React.useState(false);
-            const [progress, setProgress] = React.useState(0);
-            const [stage, setStage] = React.useState('');
-
-            React.useEffect(() => {
-                const analyzeDocs = async () => {
-                    const selectedDocs = documents.filter(d => d.selected);
-                    if (selectedDocs.length === 0) return;
-                    if (!apiKey) return;
-                    
-                    setIsAnalyzing(true);
-                    setStage('Insight Lens: Material Analysis...');
-                    setProgress(20);
-                    
-                    const context = getSelectedContext(documents);
-                    const prompt = `
-                    Analyze the following environmental/sustainability document text.
-                    Act as EcoLens, an AI that identifies circular economy opportunities.
-                    Extract data and return ONLY a valid JSON object matching this schema exactly:
-                    {
-                        "complianceScore": <number between 0 and 100>,
-                        "overallProgress": <number between 0 and 100>,
-                        "opportunities": [
-                            { "title": "<string>", "feasibility": <number>, "description": "<string>", "impact": "High" | "Medium" | "Low" }
-                        ],
-                        "auditorLogs": [
-                            { "time": "<HH:MM:SS>", "message": "<string>", "status": "Compliant" | "Warning" | "Risk" | "Completed" }
-                        ],
-                        "summary": "<A 2-3 sentence summary of findings>"
-                    }
-                    Keep it realistic based on the text. Generate 3-4 opportunities. Generate 4-5 log entries.
-                    \n\nTEXT:\n${context.substring(0, 50000)}
-                    `;
-
-                    try {
-                        setTimeout(() => { setStage('Opportunity Lens: Circular Mapping...'); setProgress(50); }, 1500);
-                        setTimeout(() => { setStage('Compliance Lens: Regulatory Audit...'); setProgress(80); }, 3000);
-                        
-                        const data = await callGemini(prompt, apiKey, "json");
-                        setDashboardData(data);
-                        setProgress(100);
-                        setStage('Completed');
-                    } catch (err) {
-                        console.error("Dashboard analysis failed", err);
-                        // Fallback dummy data if it fails or parses wrong
-                        setDashboardData({
-                            complianceScore: 78,
-                            overallProgress: 100,
-                            opportunities: [
-                                { title: "Biochar Production", feasibility: 92, description: "High carbon content makes it ideal for biochar.", impact: "High" },
-                                { title: "Animal Feed Additive", feasibility: 84, description: "Nutrient profile suitable for livestock feed.", impact: "Medium" }
-                            ],
-                            auditorLogs: [
-                                { time: "10:42:11", message: "Checking waste classification...", status: "Compliant" },
-                                { time: "10:42:13", message: "Verifying environmental permits...", status: "Warning" }
-                            ],
-                            summary: "The document indicates strong potential for circular utilization of processed waste."
-                        });
-                    } finally {
-                        setIsAnalyzing(false);
-                    }
-                };
-
-                // Only run if we don't have data and we have docs, OR if docs changed (simplified logic here)
-                if (documents.filter(d => d.selected).length > 0 && !isAnalyzing) {
-                   analyzeDocs();
-                }
-            }, [documents.map(d=>d.selected).join(','), documents.length]);
-
-            if (documents.length === 0) {
-                return <div className="flex items-center justify-center h-full text-slate-500">Upload documents to see the dashboard analysis.</div>;
+            const contextStr = getSelectedContext();
+            if (!contextStr) {
+                appendMessage('ai', "⚠️ Please upload and select at least one document from the sidebar to analyze.");
+                submitBtn.disabled = false;
+                return;
             }
 
-            const data = dashboardData || {
-                complianceScore: 0, overallProgress: 0, opportunities: [], auditorLogs: [], summary: "Awaiting analysis..."
-            };
+            const prompt = `${contextStr}\n\nUser Query: ${message}`;
+            
+            // Show loading bubble
+            const loadingId = 'msg-loading-' + Date.now();
+            appendLoadingMessage(loadingId);
 
-            return (
-                <div className="grid grid-cols-3 gap-6 animate-fade-in">
-                    {/* Pipeline */}
-                    <div className="col-span-2 bg-white dark:bg-slate-900 rounded-xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-lg font-semibold flex items-center gap-2"><Icons.TrendingUp/> AI Analysis Pipeline <span className="bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full ml-2 font-medium border border-green-200 dark:bg-green-900 dark:text-green-300 dark:border-green-800">Live</span></h2>
-                        </div>
-                        
-                        {/* Status Nodes */}
-                        <div className="flex justify-between items-center relative mb-8 px-8">
-                            <div className="absolute left-10 right-10 top-1/2 h-0.5 bg-slate-200 dark:bg-slate-700 -z-10 transform -translate-y-1/2"></div>
-                            
-                            <div className="flex flex-col items-center gap-2 bg-white dark:bg-slate-900">
-                                <div className={`w-12 h-12 rounded-full flex items-center justify-center border-2 ${progress > 10 ? 'border-green-500 bg-green-50 dark:bg-green-900/30 text-green-600' : 'border-slate-200 text-slate-400'}`}>
-                                    <Icons.Search />
-                                </div>
-                                <span className="text-xs font-medium">Insight Lens</span>
-                            </div>
-                            <div className="flex flex-col items-center gap-2 bg-white dark:bg-slate-900">
-                                <div className={`w-12 h-12 rounded-full flex items-center justify-center border-2 ${progress > 40 ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-600' : 'border-slate-200 text-slate-400'}`}>
-                                    <Icons.TrendingUp />
-                                </div>
-                                <span className="text-xs font-medium">Opportunity Lens</span>
-                            </div>
-                            <div className="flex flex-col items-center gap-2 bg-white dark:bg-slate-900">
-                                <div className={`w-12 h-12 rounded-full flex items-center justify-center border-2 ${progress > 70 ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30 text-purple-600' : 'border-slate-200 text-slate-400'}`}>
-                                    <Icons.Shield />
-                                </div>
-                                <span className="text-xs font-medium">Compliance Lens</span>
-                            </div>
-                        </div>
-
-                        {/* Progress Details */}
-                        <div className="space-y-4">
-                            <div className="flex justify-between text-sm mb-1">
-                                <span className="text-slate-500">Current Stage: <strong className="text-slate-900 dark:text-slate-100">{stage || 'Waiting...'}</strong></span>
-                                {isAnalyzing && <span className="flex items-center gap-2 text-slate-500"><div className="spinner w-4 h-4 border-2"></div> Processing...</span>}
-                            </div>
-                            
-                            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4 flex justify-between items-center border border-slate-100 dark:border-slate-700">
-                                <div>
-                                    <h4 className="font-medium text-sm">Insight Lens <span className="text-xs bg-green-100 text-green-700 px-1.5 rounded ml-2 dark:bg-green-900 dark:text-green-300">Completed</span></h4>
-                                    <p className="text-xs text-slate-500 mt-1">Extracted key materials, composition, and environmental insights.</p>
-                                </div>
-                                <button className="text-xs font-medium text-green-600 hover:text-green-700">View Results</button>
-                            </div>
-
-                            <div className="flex items-center gap-4 text-sm mt-6">
-                                <span className="text-slate-500 whitespace-nowrap">Overall Progress</span>
-                                <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
-                                    <div className="bg-green-500 h-2 rounded-full transition-all duration-500" style={{width: `${progress}%`}}></div>
-                                </div>
-                                <span className="font-medium">{progress}%</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Auditor */}
-                    <div className="col-span-1 bg-white dark:bg-slate-900 rounded-xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col">
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-lg font-semibold flex items-center gap-2"><Icons.Shield/> Compliance Auditor</h2>
-                            <div className="flex items-center gap-1 text-xs text-green-600"><div className="pulse-dot w-2 h-2"></div> Live Log</div>
-                        </div>
-                        <div className="flex-1 overflow-y-auto space-y-3 text-xs font-mono">
-                            {data.auditorLogs.map((log, i) => (
-                                <div key={i} className="flex justify-between items-start gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
-                                    <span className="text-slate-400">{log.time}</span>
-                                    <span className="flex-1 text-slate-700 dark:text-slate-300">{log.message}</span>
-                                    <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wide
-                                        ${log.status === 'Compliant' || log.status === 'Completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400' : 
-                                          log.status === 'Warning' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400' : 
-                                          'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400'}`}>
-                                        {log.status}
-                                    </span>
-                                </div>
-                            ))}
-                            {data.auditorLogs.length === 0 && <div className="text-slate-400 italic">Logs will appear during analysis...</div>}
-                        </div>
-                        
-                        <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800">
-                             <div className="flex items-center justify-between">
-                                 <div>
-                                    <h3 className="text-sm font-semibold mb-1">Readiness Score</h3>
-                                    <p className="text-xs text-slate-500">Based on regulatory checks</p>
-                                 </div>
-                                 <div className="relative w-16 h-16 flex items-center justify-center">
-                                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                                        <path className="text-slate-200 dark:text-slate-700" strokeWidth="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                        <path className="text-green-500 transition-all duration-1000" strokeDasharray={`${data.complianceScore}, 100`} strokeWidth="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                    </svg>
-                                    <span className="absolute text-lg font-bold">{data.complianceScore}%</span>
-                                 </div>
-                             </div>
-                        </div>
-                    </div>
-
-                    {/* Opportunities */}
-                    <div className="col-span-3">
-                        <h2 className="text-lg font-semibold mb-4">AI Generated Opportunities</h2>
-                        <div className="grid grid-cols-3 gap-4">
-                            {data.opportunities.map((opp, i) => (
-                                <div key={i} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <h3 className="font-semibold text-sm flex items-center gap-1.5"><Icons.Leaf/> {opp.title}</h3>
-                                        <span className="text-xs text-slate-500 font-mono">Feas: {opp.feasibility}%</span>
-                                    </div>
-                                    <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 flex-1">{opp.description}</p>
-                                    <div className="mt-auto">
-                                        <span className={`text-[10px] px-2 py-1 rounded-full font-medium
-                                            ${opp.impact === 'High' ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400' : 
-                                              opp.impact === 'Medium' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-400' : 
-                                              'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400'}`}>
-                                            {opp.impact} Impact
-                                        </span>
-                                    </div>
-                                </div>
-                            ))}
-                            {data.opportunities.length === 0 && !isAnalyzing && (
-                                <div className="col-span-3 text-center p-8 bg-white dark:bg-slate-900 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-slate-500">
-                                    Select documents and wait for analysis to discover circular economy opportunities.
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        const ConceptExplorer = ({ documents, apiKey }) => {
-            const [data, setData] = React.useState(null);
-            const [loading, setLoading] = React.useState(false);
-            const [expanded, setExpanded] = React.useState({});
-
-            const generateConcepts = async () => {
-                if (!apiKey) return alert("API Key required");
-                setLoading(true);
-                try {
-                    const ctx = getSelectedContext(documents);
-                    const prompt = `Extract key sustainability, environmental, and business concepts from the text. 
-                    Create a hierarchical structure (like a Wikipedia index).
-                    Return ONLY valid JSON:
-                    [
-                      { "id": "1", "name": "Concept Category", "desc": "Brief description", "children": [
-                          { "id": "1-1", "name": "Sub-concept", "desc": "Description" }
-                      ]}
-                    ]`;
-                    const res = await callGemini(prompt, apiKey, "json");
-                    setData(res);
-                } catch (e) {
-                    alert("Failed to generate concepts: " + e.message);
-                } finally {
-                    setLoading(false);
+            try {
+                const response = await callGemini(prompt, EcoLensPersona, false);
+                removeLoadingMessage(loadingId);
+                appendMessage('ai', response);
+            } catch (error) {
+                removeLoadingMessage(loadingId);
+                appendMessage('ai', `❌ Error: ${error.message}`);
+                if(error.message.includes("API Key is missing")) {
+                     document.getElementById('api-key-input').focus();
                 }
-            };
+            } finally {
+                submitBtn.disabled = false;
+            }
+        }
 
-            const toggle = (id) => setExpanded(prev => ({...prev, [id]: !prev[id]}));
-
-            const renderTree = (nodes) => (
-                <ul className="pl-4 border-l border-slate-200 dark:border-slate-700 space-y-2 mt-2">
-                    {nodes.map(node => (
-                        <li key={node.id} className="relative">
-                            <div 
-                                className="flex flex-col p-3 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
-                                onClick={() => toggle(node.id)}
-                            >
-                                <div className="flex items-center gap-2 font-medium">
-                                    {node.children && node.children.length > 0 ? (
-                                        expanded[node.id] ? <Icons.ChevronDown /> : <Icons.ChevronRight />
-                                    ) : <div className="w-4 h-4"></div>}
-                                    {node.name}
-                                </div>
-                                <p className="text-xs text-slate-500 ml-6 mt-1">{node.desc}</p>
-                            </div>
-                            {node.children && expanded[node.id] && renderTree(node.children)}
-                        </li>
-                    ))}
-                </ul>
-            );
-
-            return (
-                <div className="max-w-4xl mx-auto animate-fade-in">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-xl font-bold">Interactive Concept Explorer</h2>
-                        <button onClick={generateConcepts} disabled={loading || documents.length===0} className="bg-eco-600 hover:bg-eco-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2">
-                            {loading ? <div className="spinner border-white border-l-transparent w-4 h-4"></div> : <Icons.Bot />}
-                            Generate Ontology Map
-                        </button>
+        function appendMessage(role, content) {
+            const container = document.getElementById('chat-messages');
+            const div = document.createElement('div');
+            div.className = 'flex gap-4 animate-fade-in';
+            
+            if (role === 'user') {
+                div.classList.add('flex-row-reverse');
+                div.innerHTML = `
+                    <div class="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-user text-slate-500 dark:text-slate-300"></i>
                     </div>
-                    {data ? (
-                        <div className="bg-slate-50 dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800">
-                            {renderTree(data)}
-                        </div>
-                    ) : (
-                        <div className="text-center py-20 text-slate-500 border border-dashed rounded-xl border-slate-300 dark:border-slate-700">
-                            Click Generate to extract a structured knowledge base from your documents.
-                        </div>
-                    )}
+                    <div class="bg-eco-600 text-white p-4 rounded-2xl rounded-tr-none shadow-sm max-w-[85%]">
+                        <p class="text-sm whitespace-pre-wrap">${escapeHtml(content)}</p>
+                    </div>
+                `;
+            } else {
+                const parsedContent = DOMPurify.sanitize(marked.parse(content));
+                div.innerHTML = `
+                    <div class="w-10 h-10 rounded-full bg-eco-100 dark:bg-eco-900 flex items-center justify-center shrink-0 border border-eco-200 dark:border-eco-700">
+                        <i class="fa-solid fa-leaf text-eco-600 dark:text-eco-400"></i>
+                    </div>
+                    <div class="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-4 rounded-2xl rounded-tl-none shadow-sm max-w-[85%] markdown-body text-sm overflow-hidden">
+                        ${parsedContent}
+                    </div>
+                `;
+            }
+            
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function appendLoadingMessage(id) {
+            const container = document.getElementById('chat-messages');
+            const div = document.createElement('div');
+            div.id = id;
+            div.className = 'flex gap-4 animate-fade-in';
+            div.innerHTML = `
+                <div class="w-10 h-10 rounded-full bg-eco-100 dark:bg-eco-900 flex items-center justify-center shrink-0 border border-eco-200 dark:border-eco-700">
+                    <i class="fa-solid fa-leaf text-eco-600 dark:text-eco-400 animate-pulse"></i>
                 </div>
-            );
-        };
+                <div class="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-4 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-2">
+                    <div class="w-2 h-2 bg-eco-400 rounded-full animate-bounce" style="animation-delay: 0s"></div>
+                    <div class="w-2 h-2 bg-eco-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                    <div class="w-2 h-2 bg-eco-400 rounded-full animate-bounce" style="animation-delay: 0.4s"></div>
+                </div>
+            `;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
 
-        const SlideGenerator = ({ documents, apiKey }) => {
-            const [slides, setSlides] = React.useState(null);
-            const [loading, setLoading] = React.useState(false);
+        function removeLoadingMessage(id) {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        }
 
-            const generateSlides = async () => {
-                if (!apiKey) return;
-                setLoading(true);
-                try {
-                    const ctx = getSelectedContext(documents);
-                    const prompt = `Create a professional presentation slide deck outline based on the text.
-                    Focus on key findings, opportunities, and action items.
-                    Return ONLY valid JSON:
-                    [ { "title": "Slide Title", "bullets": ["Point 1", "Point 2", "Point 3"] } ]`;
-                    const res = await callGemini(prompt, apiKey, "json");
-                    setSlides(res);
-                } catch (e) { alert("Failed: " + e.message); } finally { setLoading(false); }
-            };
+        function escapeHtml(unsafe) {
+            return unsafe
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+        }
 
-            const exportPDF = () => {
-                if (!slides) return;
-                const { jsPDF } = window.jspdf;
-                const doc = new jsPDF({ orientation: 'landscape' });
-                
-                slides.forEach((slide, i) => {
-                    if (i > 0) doc.addPage();
-                    
-                    // Simple styling
-                    doc.setFillColor(22, 163, 74); // Eco green
-                    doc.rect(0, 0, 297, 20, 'F');
-                    
-                    doc.setTextColor(255, 255, 255);
-                    doc.setFontSize(22);
-                    doc.text(slide.title, 14, 14);
-                    
-                    doc.setTextColor(50, 50, 50);
-                    doc.setFontSize(14);
-                    let y = 40;
-                    slide.bullets.forEach(b => {
-                        const lines = doc.splitTextToSize(`• ${b}`, 260);
-                        doc.text(lines, 20, y);
-                        y += (lines.length * 8) + 5;
-                    });
+        // Auto-resize textarea
+        document.getElementById('chat-input').addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight < 120 ? this.scrollHeight : 120) + 'px';
+        });
+
+        // --- Tab Content Generators (Agentic Tools) ---
+
+        function showToolLoading(text) {
+            document.getElementById('tool-loading-text').textContent = text;
+            document.getElementById('tool-loading-overlay').classList.remove('hidden');
+            State.isGenerating = true;
+        }
+
+        function hideToolLoading() {
+            document.getElementById('tool-loading-overlay').classList.add('hidden');
+            State.isGenerating = false;
+        }
+
+        async function generateToolContent(type) {
+            if (State.isGenerating) return;
+
+            const contextStr = getSelectedContext();
+            if (!contextStr && type !== 'policy') { // Policy might ask generally, but better with context
+                alert("Please select at least one document to analyze.");
+                return;
+            }
+
+            try {
+                switch(type) {
+                    case 'explorer':
+                        await runExplorerAgent(contextStr);
+                        break;
+                    case 'slides':
+                        await runSlidesAgent(contextStr);
+                        break;
+                    case 'brief':
+                        await runBriefAgent(contextStr);
+                        break;
+                    case 'map':
+                        await runMapAgent(contextStr);
+                        break;
+                    case 'policy':
+                        const scenario = document.getElementById('policy-scenario-input').value.trim();
+                        if (!scenario) {
+                            alert("Please enter a policy scenario.");
+                            return;
+                        }
+                        await runPolicyAgent(contextStr, scenario);
+                        break;
+                }
+            } catch (error) {
+                console.error(error);
+                alert(`Error generating content: ${error.message}`);
+            } finally {
+                hideToolLoading();
+            }
+        }
+
+        // 1. Concept Explorer Agent
+        async function runExplorerAgent(context) {
+            showToolLoading("Extracting Hierarchical Concepts...");
+            const systemPrompt = `You are a knowledge extraction agent. Analyze the provided documents and create a structured, hierarchical ontology of key concepts, materials, and processes mentioned.`;
+            const userPrompt = `${context}\n\nTask: Generate a JSON array representing a hierarchy. Format:
+[ { "title": "Main Category 1", "description": "Brief desc", "children": [ { "title": "Subcategory 1.1", "description": "Brief desc", "children": [] } ] } ]
+Max depth 3. Keep descriptions under 15 words. Return ONLY valid JSON.`;
+
+            const jsonStr = await callGemini(userPrompt, systemPrompt, true);
+            const data = JSON.parse(jsonStr);
+            
+            const container = document.getElementById('explorer-content');
+            container.innerHTML = '';
+            
+            function buildTree(nodes, isRoot = false) {
+                if (!nodes || nodes.length === 0) return '';
+                let html = `<ul class="${isRoot ? 'space-y-3' : 'ml-6 mt-2 space-y-2 border-l border-gray-200 dark:border-slate-700 pl-4'}">`;
+                nodes.forEach(node => {
+                    const hasChildren = node.children && node.children.length > 0;
+                    if (hasChildren) {
+                        html += `
+                            <li>
+                                <details class="group" ${isRoot ? 'open' : ''}>
+                                    <summary class="flex items-center cursor-pointer font-medium text-gray-800 dark:text-gray-200 hover:text-eco-600 dark:hover:text-eco-400 select-none">
+                                        <i class="fa-solid fa-chevron-right text-xs mr-2 transition-transform group-open:rotate-90 text-gray-400"></i>
+                                        <span class="bg-gray-100 dark:bg-slate-800 px-2 py-1 rounded text-sm">${escapeHtml(node.title)}</span>
+                                        ${node.description ? `<span class="ml-3 text-xs font-normal text-gray-500">${escapeHtml(node.description)}</span>` : ''}
+                                    </summary>
+                                    ${buildTree(node.children)}
+                                </details>
+                            </li>`;
+                    } else {
+                        html += `
+                            <li class="flex items-center text-sm text-gray-700 dark:text-gray-300 py-1">
+                                <i class="fa-solid fa-minus text-gray-300 dark:text-slate-600 mr-2 text-xs"></i>
+                                <span class="font-medium">${escapeHtml(node.title)}</span>
+                                ${node.description ? `<span class="ml-2 text-gray-500 dark:text-gray-400 text-xs">- ${escapeHtml(node.description)}</span>` : ''}
+                            </li>`;
+                    }
                 });
-                doc.save("EcoLens_SlideDeck.pdf");
-            };
+                html += `</ul>`;
+                return html;
+            }
 
-            return (
-                <div className="max-w-5xl mx-auto animate-fade-in">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-xl font-bold">Slide Deck Generator</h2>
-                        <div className="space-x-3">
-                            <button onClick={generateSlides} disabled={loading} className="bg-eco-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">Generate Slides</button>
-                            {slides && <button onClick={exportPDF} className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 inline-flex"><Icons.Download/> Export PDF</button>}
-                        </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-6">
-                        {slides ? slides.map((slide, i) => (
-                            <div key={i} className="aspect-[16/9] bg-white dark:bg-slate-800 rounded-xl p-8 border border-slate-200 dark:border-slate-700 shadow flex flex-col justify-center relative overflow-hidden">
-                                <div className="absolute top-0 left-0 w-full h-2 bg-eco-500"></div>
-                                <h3 className="text-2xl font-bold mb-6 text-slate-800 dark:text-slate-100">{slide.title}</h3>
-                                <ul className="space-y-3 text-slate-600 dark:text-slate-300">
-                                    {slide.bullets.map((b, j) => <li key={j} className="flex gap-2 text-lg"><span className="text-eco-500">•</span> {b}</li>)}
-                                </ul>
-                                <div className="absolute bottom-4 right-6 text-slate-300 dark:text-slate-600 font-mono text-sm">{i+1}</div>
-                            </div>
-                        )) : (
-                            <div className="col-span-2 text-center py-20 text-slate-500 border border-dashed rounded-xl border-slate-300 dark:border-slate-700">
-                                Generate to preview slides here.
-                            </div>
-                        )}
-                    </div>
-                </div>
-            );
-        };
+            container.innerHTML = buildTree(data, true);
+        }
 
-        const ResearchBrief = ({ documents, apiKey }) => {
-            const [brief, setBrief] = React.useState("");
-            const [loading, setLoading] = React.useState(false);
+        // 2. Slide Deck Agent
+        async function runSlidesAgent(context) {
+            showToolLoading("Designing Slide Deck...");
+            const systemPrompt = `You are an expert presentation designer and sustainability consultant. Create a professional slide deck outline based on the documents. Focus on Data, Opportunities, and Compliance.`;
+            const userPrompt = `${context}\n\nTask: Generate a presentation outline. Return ONLY valid JSON in this format:
+[ { "title": "Slide Title", "type": "title|content|metrics", "content": ["Bullet point 1", "Bullet point 2"] } ]
+Create 5 to 8 slides.`;
 
-            const generateBrief = async () => {
-                if (!apiKey) return;
-                setLoading(true);
-                try {
-                    const ctx = getSelectedContext(documents);
-                    const prompt = `Write a comprehensive, professional AI Research Brief based on the documents.
-                    Format using Markdown. Include: Executive Summary, Key Findings, Strategic Recommendations, and Conclusion.`;
-                    const res = await callGemini(prompt, apiKey, "text", "You are an expert environmental consultant.");
-                    setBrief(res);
-                } catch (e) { alert("Failed: " + e.message); } finally { setLoading(false); }
-            };
-
-            return (
-                <div className="max-w-4xl mx-auto h-full flex flex-col animate-fade-in">
-                    <div className="flex justify-between items-center mb-6 shrink-0">
-                        <h2 className="text-xl font-bold">AI Research Brief Generator</h2>
-                        <button onClick={generateBrief} disabled={loading} className="bg-eco-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2">
-                            {loading ? <div className="spinner border-white border-l-transparent w-4 h-4"></div> : <Icons.FileText/>} Generate Brief
-                        </button>
-                    </div>
-                    <div className="flex-1 overflow-y-auto bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm">
-                        {brief ? (
-                            <div className="prose prose-slate dark:prose-invert max-w-none prose-headings:font-semibold prose-a:text-eco-600" dangerouslySetInnerHTML={{__html: marked.parse(brief)}}></div>
-                        ) : (
-                            <div className="h-full flex items-center justify-center text-slate-400 italic">Document text will be synthesized into a structured brief.</div>
-                        )}
-                    </div>
-                </div>
-            );
-        };
-
-        const KnowledgeMap = ({ documents, apiKey }) => {
-            const canvasRef = React.useRef(null);
-            const [loading, setLoading] = React.useState(false);
-            const [graphData, setGraphData] = React.useState(null);
-
-            const generateGraph = async () => {
-                if (!apiKey) return;
-                setLoading(true);
-                try {
-                    const ctx = getSelectedContext(documents);
-                    const prompt = `Extract an entity relationship graph from the text focusing on sustainability, materials, and processes.
-                    Return exactly 15 nodes and relevant links.
-                    Return ONLY valid JSON:
-                    { "nodes": [{ "id": "Entity1", "group": 1 }], "links": [{ "source": "Entity1", "target": "Entity2", "label": "relates to" }] }`;
-                    const res = await callGemini(prompt, apiKey, "json");
-                    setGraphData(res);
-                } catch (e) { alert("Failed: " + e.message); } finally { setLoading(false); }
-            };
-
-            // Simple physics engine & canvas renderer
-            React.useEffect(() => {
-                if (!graphData || !canvasRef.current) return;
-                const canvas = canvasRef.current;
-                const ctx = canvas.getContext('2d');
-                let width = canvas.clientWidth;
-                let height = canvas.clientHeight;
-                canvas.width = width; canvas.height = height;
-
-                // Initialize node positions randomly
-                const nodes = graphData.nodes.map(n => ({
-                    ...n, x: Math.random() * width, y: Math.random() * height, vx: 0, vy: 0, radius: 25
-                }));
-                const links = graphData.links;
+            const jsonStr = await callGemini(userPrompt, systemPrompt, true);
+            const slides = JSON.parse(jsonStr);
+            
+            const container = document.getElementById('slides-content');
+            container.innerHTML = '';
+            
+            slides.forEach((slide, index) => {
+                const div = document.createElement('div');
+                div.className = 'bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl p-8 aspect-video shadow-sm flex flex-col relative page-break-inside-avoid';
                 
-                let animationFrameId;
+                // Slide Number
+                div.innerHTML += `<div class="absolute bottom-4 right-4 text-xs text-gray-400 font-mono">${index + 1}</div>`;
+                
+                // EcoLens branding
+                div.innerHTML += `<div class="absolute top-4 right-4 text-xs text-eco-500 font-bold opacity-50"><i class="fa-solid fa-leaf"></i> EcoLens</div>`;
 
-                const draw = () => {
-                    ctx.clearRect(0, 0, width, height);
-                    
-                    // Simple force-directed logic
-                    const k = Math.sqrt((width * height) / nodes.length);
-                    
-                    // Repulsion
-                    for (let i=0; i<nodes.length; i++) {
-                        for (let j=i+1; j<nodes.length; j++) {
-                            let dx = nodes[i].x - nodes[j].x;
-                            let dy = nodes[i].y - nodes[j].y;
-                            let dist = Math.sqrt(dx*dx + dy*dy) || 1;
-                            let force = (k*k) / dist;
-                            let fx = (dx/dist) * force * 0.05;
-                            let fy = (dy/dist) * force * 0.05;
-                            nodes[i].vx += fx; nodes[i].vy += fy;
-                            nodes[j].vx -= fx; nodes[j].vy -= fy;
-                        }
-                    }
-
-                    // Attraction (Links)
-                    links.forEach(link => {
-                        let source = nodes.find(n => n.id === link.source) || nodes[0];
-                        let target = nodes.find(n => n.id === link.target) || nodes[1];
-                        if(!source || !target) return;
-                        let dx = target.x - source.x;
-                        let dy = target.y - source.y;
-                        let dist = Math.sqrt(dx*dx + dy*dy) || 1;
-                        let force = (dist*dist) / k;
-                        let fx = (dx/dist) * force * 0.005;
-                        let fy = (dy/dist) * force * 0.005;
-                        source.vx += fx; source.vy += fy;
-                        target.vx -= fx; target.vy -= fy;
+                if (slide.type === 'title' || index === 0) {
+                    div.classList.add('justify-center', 'items-center', 'text-center', 'bg-gradient-to-br', 'from-eco-50', 'to-white', 'dark:from-slate-800', 'dark:to-slate-900');
+                    div.innerHTML += `
+                        <h2 class="text-3xl font-bold text-gray-800 dark:text-white mb-4">${escapeHtml(slide.title)}</h2>
+                        <div class="h-1 w-16 bg-eco-500 mb-4"></div>
+                        <p class="text-gray-600 dark:text-gray-400">${slide.content ? escapeHtml(slide.content[0]) : ''}</p>
+                    `;
+                } else {
+                    div.innerHTML += `<h3 class="text-xl font-bold text-gray-800 dark:text-white mb-6 border-b border-gray-100 dark:border-slate-800 pb-2">${escapeHtml(slide.title)}</h3>`;
+                    let listHtml = '<ul class="space-y-3 flex-1 text-gray-600 dark:text-gray-300">';
+                    (slide.content || []).forEach(point => {
+                        listHtml += `<li class="flex items-start"><i class="fa-solid fa-caret-right text-eco-500 mt-1 mr-3 text-sm"></i> <span>${escapeHtml(point)}</span></li>`;
                     });
+                    listHtml += '</ul>';
+                    div.innerHTML += listHtml;
+                }
+                container.appendChild(div);
+            });
 
-                    // Update & Draw
-                    const isDark = document.documentElement.classList.contains('dark');
-                    const strokeColor = isDark ? '#334155' : '#cbd5e1';
-                    const textColor = isDark ? '#f8fafc' : '#0f172a';
+            document.getElementById('btn-export-slides').classList.remove('hidden');
+            document.getElementById('btn-export-slides').classList.add('flex');
+        }
 
-                    // Draw links
-                    links.forEach(link => {
-                        let source = nodes.find(n => n.id === link.source);
-                        let target = nodes.find(n => n.id === link.target);
-                        if(source && target) {
-                            ctx.beginPath();
-                            ctx.moveTo(source.x, source.y);
-                            ctx.lineTo(target.x, target.y);
-                            ctx.strokeStyle = strokeColor;
-                            ctx.lineWidth = 1;
-                            ctx.stroke();
-                        }
-                    });
+        function exportSlidesPdf() {
+            const element = document.getElementById('slides-content');
+            const opt = {
+                margin:       10,
+                filename:     'EcoLens_SlideDeck.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
+            };
+            
+            // Temporarily modify styles for better PDF output
+            const originalClass = element.className;
+            element.className = 'grid grid-cols-1 gap-8'; // Stack them for printing
+            
+            html2pdf().set(opt).from(element).save().then(() => {
+                element.className = originalClass; // Restore grid
+            });
+        }
 
-                    // Draw nodes
-                    nodes.forEach(node => {
-                        // Apply velocity & dampening
-                        node.x += node.vx; node.y += node.vy;
-                        node.vx *= 0.85; node.vy *= 0.85;
-                        // Bounds
-                        node.x = Math.max(node.radius, Math.min(width - node.radius, node.x));
-                        node.y = Math.max(node.radius, Math.min(height - node.radius, node.y));
+        // 3. Research Brief Agent
+        async function runBriefAgent(context) {
+            showToolLoading("Synthesizing Research Brief...");
+            const systemPrompt = `You are EcoLens Lead Analyst. Write a comprehensive, professional executive research brief based on the provided documents.`;
+            const userPrompt = `${context}\n\nTask: Generate a Markdown formatted research brief. 
+Include these sections: 
+1. Executive Summary
+2. Material & Waste Analysis (Insight Lens)
+3. Circular Economy Opportunities (Opportunity Lens - list specific feasible products/uses)
+4. Regulatory & Compliance Readiness (Compliance Lens)
+5. Recommended Action Plan.
+Use professional formatting, tables if appropriate, and bold key metrics.`;
 
-                        ctx.beginPath();
-                        ctx.arc(node.x, node.y, node.radius, 0, 2*Math.PI);
-                        ctx.fillStyle = '#22c55e';
-                        ctx.fill();
-                        ctx.strokeStyle = '#166534';
-                        ctx.stroke();
+            const markdown = await callGemini(userPrompt, systemPrompt, false);
+            const container = document.getElementById('brief-content');
+            container.innerHTML = DOMPurify.sanitize(marked.parse(markdown));
+        }
 
-                        ctx.fillStyle = textColor;
-                        ctx.font = '10px Arial';
-                        ctx.textAlign = 'center';
-                        ctx.fillText(node.id.substring(0, 15), node.x, node.y + 4);
-                    });
+        // 4. Knowledge Map Agent
+        async function runMapAgent(context) {
+            showToolLoading("Mapping Entities & Relationships...");
+            const systemPrompt = `You are a data ontology extractor. Extract key entities (materials, products, regulations, organizations) and their relationships from the documents to build a network graph.`;
+            const userPrompt = `${context}\n\nTask: Extract a network graph. Limit to the top 20 most important nodes to keep it legible.
+Return ONLY valid JSON in this format:
+{
+  "nodes": [ { "id": 1, "label": "Entity Name", "group": "material|product|regulation" } ],
+  "edges": [ { "from": 1, "to": 2, "label": "relationship description" } ]
+}`;
 
-                    animationFrameId = requestAnimationFrame(draw);
+            const jsonStr = await callGemini(userPrompt, systemPrompt, true);
+            const data = JSON.parse(jsonStr);
+            
+            document.getElementById('map-placeholder').style.display = 'none';
+            const container = document.getElementById('network-container');
+            
+            // Assign colors based on groups
+            const colorMap = {
+                material: { background: '#d1fae5', border: '#10b981', font: {color: '#064e3b'} }, // eco-100, eco-500
+                product: { background: '#e0e7ff', border: '#6366f1', font: {color: '#312e81'} }, // indigo
+                regulation: { background: '#fee2e2', border: '#ef4444', font: {color: '#7f1d1d'} }, // red
+                default: { background: '#f1f5f9', border: '#94a3b8', font: {color: '#1e293b'} } // slate
+            };
+
+            const styledNodes = data.nodes.map(node => {
+                const style = colorMap[node.group] || colorMap.default;
+                return {
+                    ...node,
+                    color: { background: style.background, border: style.border, highlight: { border: '#000' } },
+                    font: style.font,
+                    shape: 'box',
+                    borderWidth: 2,
+                    borderRadius: 8,
+                    margin: 10
                 };
-                
-                draw();
-                return () => cancelAnimationFrame(animationFrameId);
-            }, [graphData]);
+            });
 
-            return (
-                <div className="flex flex-col h-full animate-fade-in">
-                    <div className="flex justify-between items-center mb-6 shrink-0">
-                        <h2 className="text-xl font-bold">Knowledge Map</h2>
-                        <button onClick={generateGraph} disabled={loading} className="bg-eco-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2">
-                            {loading ? <div className="spinner border-white border-l-transparent w-4 h-4"></div> : <Icons.TrendingUp/>} Generate Network
-                        </button>
-                    </div>
-                    <div className="flex-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
-                        {!graphData && (
-                            <div className="absolute inset-0 flex items-center justify-center text-slate-400 z-10 pointer-events-none">
-                                Generate to visualize relationships between entities in your documents.
-                            </div>
-                        )}
-                        <canvas ref={canvasRef} id="knowledge-canvas" className="w-full h-full block"></canvas>
-                    </div>
-                </div>
-            );
-        };
+            const styledEdges = data.edges.map(edge => ({
+                ...edge,
+                font: { size: 10, align: 'middle', color: State.isDarkMode ? '#cbd5e1' : '#64748b', strokeWidth: 0 },
+                color: { color: State.isDarkMode ? '#475569' : '#cbd5e1' },
+                arrows: 'to'
+            }));
 
-        const PolicyImpact = ({ documents, apiKey }) => {
-            const [scenario, setScenario] = React.useState("");
-            const [analysis, setAnalysis] = React.useState("");
-            const [loading, setLoading] = React.useState(false);
-
-            const analyzeImpact = async () => {
-                if (!apiKey || !scenario) return;
-                setLoading(true);
-                try {
-                    const ctx = getSelectedContext(documents);
-                    const prompt = `Based on the following documents, analyze the impact of this hypothetical scenario/policy change:
-                    SCENARIO: "${scenario}"
-                    
-                    Provide a structured markdown response detailing:
-                    1. Immediate Impacts on operations described in docs.
-                    2. Compliance Risks triggered by this change.
-                    3. Strategic Opportunities arising from this shift.`;
-                    
-                    const res = await callGemini(prompt, apiKey, "text", "You are a regulatory foresight analyst.");
-                    setAnalysis(res);
-                } catch (e) { alert("Failed: " + e.message); } finally { setLoading(false); }
+            const networkData = { nodes: new vis.DataSet(styledNodes), edges: new vis.DataSet(styledEdges) };
+            const options = {
+                physics: { stabilization: true, barnesHut: { springLength: 200 } },
+                interaction: { hover: true, tooltipDelay: 200 }
             };
 
-            return (
-                <div className="max-w-4xl mx-auto flex flex-col h-full animate-fade-in">
-                    <h2 className="text-xl font-bold mb-4 shrink-0">Policy Impact Generator</h2>
-                    
-                    <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm mb-6 shrink-0">
-                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">"What if..." Scenario</label>
-                        <div className="flex gap-3">
-                            <input 
-                                type="text" 
-                                value={scenario}
-                                onChange={e => setScenario(e.target.value)}
-                                placeholder="e.g., A new carbon tax of $50/ton is introduced next year."
-                                className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-eco-500 text-sm"
-                            />
-                            <button onClick={analyzeImpact} disabled={loading || !scenario} className="bg-eco-600 text-white px-6 py-2 rounded-lg text-sm font-medium disabled:opacity-50 whitespace-nowrap">
-                                {loading ? "Analyzing..." : "Analyze Impact"}
-                            </button>
-                        </div>
-                    </div>
+            if (State.networkInstance) {
+                State.networkInstance.destroy();
+            }
+            State.networkInstance = new vis.Network(container, networkData, options);
+        }
 
-                    <div className="flex-1 overflow-y-auto bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm">
-                        {analysis ? (
-                             <div className="prose prose-slate dark:prose-invert max-w-none" dangerouslySetInnerHTML={{__html: marked.parse(analysis)}}></div>
-                        ) : (
-                            <div className="h-full flex items-center justify-center text-slate-400 italic">Enter a scenario to foresee its impact on your data.</div>
-                        )}
-                    </div>
-                </div>
-            );
-        };
+        // 5. Policy Impact Agent
+        async function runPolicyAgent(context, scenario) {
+            showToolLoading("Simulating Policy Impact...");
+            const systemPrompt = `You are a Regulatory Impact Analyst within EcoLens. Evaluate hypothetical policy scenarios against the user's data to predict operational, compliance, and economic impacts.`;
+            let userPrompt = `Hypothetical Policy Scenario: "${scenario}"\n\n`;
+            if (context) {
+                userPrompt += `Analyze this scenario against the following organizational data:\n${context}\n\n`;
+            } else {
+                userPrompt += `Analyze this scenario generally, as no specific documents were provided.\n\n`;
+            }
+            userPrompt += `Task: Generate an impact report in Markdown format. Include:
+1. Scenario Overview
+2. Direct Impact on Materials/Waste Streams
+3. Compliance Risks & Requirements
+4. Strategic Opportunities (How to pivot or benefit)
+Use clear headings and bullet points.`;
 
-        const Chatbot = ({ documents, apiKey }) => {
-            const [messages, setMessages] = React.useState([
-                { role: 'assistant', text: "Hello! I'm EcoLens Copilot. Ask me anything about your uploaded documents." }
-            ]);
-            const [input, setInput] = React.useState('');
-            const [isTyping, setIsTyping] = React.useState(false);
-            const chatEndRef = React.useRef(null);
+            const markdown = await callGemini(userPrompt, systemPrompt, false);
+            const container = document.getElementById('policy-content');
+            container.innerHTML = DOMPurify.sanitize(marked.parse(markdown));
+        }
 
-            const scrollToBottom = () => chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-            React.useEffect(scrollToBottom, [messages]);
+        // Initialize empty state checks
+        renderDocumentList();
 
-            const handleSend = async () => {
-                if (!input.trim() || !apiKey) return;
-                
-                const userMsg = input;
-                setInput('');
-                setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
-                setIsTyping(true);
-
-                try {
-                    const ctx = getSelectedContext(documents);
-                    const prompt = `
-                    ${ctx}
-                    
-                    USER QUERY: ${userMsg}
-                    
-                    INSTRUCTIONS:
-                    Answer the user's query based ONLY on the context provided above.
-                    If the answer is not in the documents, say so.
-                    CRITICAL: You MUST cite your sources. After relevant statements, append a citation format like [DocumentName.pdf, Page X] based on the page markers in the text. Format your response cleanly.`;
-                    
-                    const response = await callGemini(prompt, apiKey);
-                    setMessages(prev => [...prev, { role: 'assistant', text: response }]);
-                } catch (e) {
-                    setMessages(prev => [...prev, { role: 'assistant', text: `Error: ${e.message}` }]);
-                } finally {
-                    setIsTyping(false);
-                }
-            };
-
-            return (
-                <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900/50">
-                    <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-between items-center">
-                        <h3 className="font-semibold flex items-center gap-2"><Icons.Bot/> Copilot</h3>
-                        <span className="text-xs text-slate-500">{documents.filter(d=>d.selected).length} docs active</span>
-                    </div>
-                    
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                        {messages.map((msg, i) => (
-                            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
-                                    msg.role === 'user' 
-                                    ? 'bg-eco-600 text-white rounded-br-none' 
-                                    : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-bl-none text-slate-800 dark:text-slate-200 shadow-sm'
-                                }`}>
-                                    {msg.role === 'assistant' ? (
-                                        <div className="prose prose-sm dark:prose-invert prose-p:my-1" dangerouslySetInnerHTML={{__html: marked.parse(msg.text)}}></div>
-                                    ) : msg.text}
-                                </div>
-                            </div>
-                        ))}
-                        {isTyping && (
-                            <div className="flex justify-start">
-                                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-bl-none px-4 py-3 shadow-sm flex gap-1">
-                                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
-                                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
-                                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
-                                </div>
-                            </div>
-                        )}
-                        <div ref={chatEndRef} />
-                    </div>
-
-                    <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
-                        <div className="relative">
-                            <input 
-                                type="text" 
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                                placeholder="Ask about the documents..."
-                                className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-full pl-4 pr-12 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-eco-500"
-                            />
-                            <button 
-                                onClick={handleSend}
-                                disabled={isTyping || !input.trim() || !apiKey}
-                                className="absolute right-1 top-1 bottom-1 p-2 bg-eco-500 text-white rounded-full hover:bg-eco-600 disabled:opacity-50 transition-colors"
-                            >
-                                <Icons.Send />
-                            </button>
-                        </div>
-                        {!apiKey && <div className="text-[10px] text-red-500 mt-2 text-center">API Key required to use chat</div>}
-                    </div>
-                </div>
-            );
-        };
-
-
-        // --- Main App ---
-        const App = () => {
-            const [darkMode, setDarkMode] = React.useState(false);
-            const [apiKey, setApiKey] = React.useState('');
-            const [documents, setDocuments] = React.useState([]);
-            const [activeTab, setActiveTab] = React.useState('Dashboard');
-            const [dashboardData, setDashboardData] = React.useState(null);
-            const [isUploading, setIsUploading] = React.useState(false);
-
-            React.useEffect(() => {
-                if (darkMode) document.documentElement.classList.add('dark');
-                else document.documentElement.classList.remove('dark');
-            }, [darkMode]);
-
-            const handleFileUpload = async (event) => {
-                const files = Array.from(event.target.files);
-                if (!files.length) return;
-                
-                setIsUploading(true);
-                const newDocs = [];
-                for (const file of files) {
-                    if (file.type === 'application/pdf') {
-                        try {
-                            const extracted = await extractTextFromPDF(file);
-                            newDocs.push(extracted);
-                        } catch (e) {
-                            alert(`Failed to parse ${file.name}`);
-                        }
-                    }
-                }
-                setDocuments(prev => [...prev, ...newDocs]);
-                setIsUploading(false);
-                // Reset dashboard analysis trigger
-                setDashboardData(null);
-            };
-
-            const toggleDocSelection = (id) => {
-                setDocuments(docs => docs.map(d => d.id === id ? { ...d, selected: !d.selected } : d));
-            };
-
-            const TABS = ['Dashboard', 'Concept Explorer', 'Slide Deck', 'Research Brief', 'Knowledge Map', 'Policy Impact'];
-
-            return (
-                <div className="flex flex-col h-screen font-sans">
-                    {/* Top Header */}
-                    <header className="h-14 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 shrink-0 z-10 relative">
-                        <div className="flex items-center gap-2">
-                            <div className="bg-eco-500 text-white p-1 rounded-md"><Icons.Leaf /></div>
-                            <span className="font-bold text-lg tracking-tight">EcoLens</span>
-                        </div>
-                        
-                        <div className="flex items-center gap-4">
-                            <div className="relative flex items-center">
-                                <Icons.Key />
-                                <input 
-                                    type="password" 
-                                    placeholder="Gemini API Key" 
-                                    value={apiKey}
-                                    onChange={(e) => setApiKey(e.target.value)}
-                                    className="ml-2 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs px-2 py-1 w-48 focus:outline-none focus:border-eco-500 pr-8"
-                                />
-                                <div className={`absolute right-2 w-2 h-2 rounded-full ${apiKey ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : 'bg-slate-300 dark:bg-slate-600'}`}></div>
-                            </div>
-                            
-                            <button onClick={() => setDarkMode(!darkMode)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors">
-                                {darkMode ? <Icons.Sun /> : <Icons.Moon />}
-                            </button>
-                            
-                            <div className="w-8 h-8 bg-gradient-to-tr from-eco-500 to-teal-400 rounded-full border-2 border-white dark:border-slate-800 shadow-sm"></div>
-                        </div>
-                    </header>
-
-                    {/* Main Workspace Area */}
-                    <div className="flex flex-1 overflow-hidden">
-                        
-                        {/* Left Sidebar (Dark Green Theme like image) */}
-                        <aside className="w-64 bg-[#0b1b15] text-slate-300 flex flex-col shrink-0">
-                            <div className="p-4 flex-1 overflow-y-auto">
-                                <div className="mb-6">
-                                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-eco-800/50 rounded-xl cursor-pointer bg-eco-900/20 hover:bg-eco-900/40 transition-colors relative">
-                                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                            {isUploading ? (
-                                                <div className="spinner border-eco-500 border-l-transparent mb-2"></div>
-                                            ) : (
-                                                <Icons.Upload className="w-8 h-8 mb-2 text-eco-500" />
-                                            )}
-                                            <p className="text-xs text-eco-100/70 text-center px-4">
-                                                <span className="font-semibold text-eco-400">Click to upload</span> or drag PDFs here
-                                            </p>
-                                        </div>
-                                        <input type="file" className="hidden" multiple accept="application/pdf" onChange={handleFileUpload} disabled={isUploading} />
-                                    </label>
-                                </div>
-
-                                <div>
-                                    <h3 className="text-xs uppercase tracking-wider text-eco-600 font-semibold mb-3">Documents</h3>
-                                    <ul className="space-y-2">
-                                        {documents.map(doc => (
-                                            <li key={doc.id} className="bg-[#12271e] rounded-lg p-3 flex items-start gap-3 border border-[#1a382a]">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={doc.selected}
-                                                    onChange={() => toggleDocSelection(doc.id)}
-                                                    className="mt-1 accent-eco-500 w-4 h-4 rounded border-gray-600 bg-gray-700"
-                                                />
-                                                <div className="flex-1 overflow-hidden">
-                                                    <p className="text-sm text-eco-50 truncate" title={doc.name}>{doc.name}</p>
-                                                    <div className="flex justify-between items-center mt-1">
-                                                        <span className="text-[10px] text-eco-600/80">{doc.size}</span>
-                                                        <Icons.CheckCircle className="w-3 h-3 text-eco-500"/>
-                                                    </div>
-                                                </div>
-                                            </li>
-                                        ))}
-                                        {documents.length === 0 && (
-                                            <div className="text-xs text-eco-700/50 italic text-center mt-8">No documents uploaded</div>
-                                        )}
-                                    </ul>
-                                </div>
-                            </div>
-                            
-                            {/* Score card at bottom like image */}
-                            <div className="p-4 mt-auto">
-                                <div className="bg-[#153225] rounded-xl p-4 border border-[#1f4a36]">
-                                    <div className="w-8 h-8 bg-eco-500/20 rounded-lg flex items-center justify-center text-eco-500 mb-3"><Icons.Leaf/></div>
-                                    <div className="text-xs text-eco-100/70">Eco Impact Estimated</div>
-                                    <div className="text-xl font-bold text-white mt-1">+2.45 kg</div>
-                                    <div className="text-[10px] text-eco-500 mt-1">CO₂e Avoided equivalent</div>
-                                </div>
-                            </div>
-                        </aside>
-
-                        {/* Center Content */}
-                        <main className="flex-1 flex flex-col min-w-0 bg-slate-100 dark:bg-[#0a0e17]">
-                            {/* Top Nav Tabs */}
-                            <nav className="flex space-x-1 px-4 pt-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 overflow-x-auto shrink-0 scrollbar-hide">
-                                {TABS.map(tab => (
-                                    <button 
-                                        key={tab}
-                                        onClick={() => setActiveTab(tab)}
-                                        className={`px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-                                            activeTab === tab 
-                                            ? 'border-eco-500 text-eco-600 dark:text-eco-400' 
-                                            : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                                        }`}
-                                    >
-                                        {tab}
-                                    </button>
-                                ))}
-                            </nav>
-                            
-                            {/* View Router */}
-                            <div className="flex-1 overflow-y-auto p-6">
-                                {activeTab === 'Dashboard' && <DashboardView documents={documents} apiKey={apiKey} dashboardData={dashboardData} setDashboardData={setDashboardData} />}
-                                {activeTab === 'Concept Explorer' && <ConceptExplorer documents={documents} apiKey={apiKey} />}
-                                {activeTab === 'Slide Deck' && <SlideGenerator documents={documents} apiKey={apiKey} />}
-                                {activeTab === 'Research Brief' && <ResearchBrief documents={documents} apiKey={apiKey} />}
-                                {activeTab === 'Knowledge Map' && <KnowledgeMap documents={documents} apiKey={apiKey} />}
-                                {activeTab === 'Policy Impact' && <PolicyImpact documents={documents} apiKey={apiKey} />}
-                            </div>
-                        </main>
-
-                        {/* Right Sidebar: Chatbot */}
-                        <aside className="w-80 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
-                            <Chatbot documents={documents} apiKey={apiKey} />
-                        </aside>
-
-                    </div>
-                </div>
-            );
-        };
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
     </script>
 </body>
 </html>
