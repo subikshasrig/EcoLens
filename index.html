@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EcoLens - AI-Powered Research & Compliance Copilot</title>
+    <title>EcoLens - AI Copilot</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -14,13 +14,13 @@
                 extend: {
                     colors: {
                         eco: {
-                            50: '#ecfdf5',
-                            100: '#d1fae5',
-                            500: '#10b981',
-                            600: '#059669',
-                            700: '#047857',
-                            900: '#064e3b',
-                            950: '#022c22',
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            800: '#166534',
+                            900: '#0f3821', // Dark sidebar background
                         }
                     }
                 }
@@ -28,592 +28,633 @@
         }
     </script>
 
-    <!-- FontAwesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
     
-    <!-- Marked.js for Markdown parsing -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    
-    <!-- DOMPurify for sanitizing marked output -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.3/purify.min.js"></script>
-
     <!-- PDF.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script>
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';</script>
 
-    <!-- Vis-Network for Knowledge Map -->
-    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js"></script>
+    <!-- Markdown Parser -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
-    <!-- html2pdf for Slide Deck export -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- Vis Network for Knowledge Map -->
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
 
     <style>
         /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         .dark ::-webkit-scrollbar-thumb { background: #475569; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         
-        .markdown-body h1 { font-size: 1.5em; font-weight: bold; margin-bottom: 0.5em; margin-top: 1em; }
-        .markdown-body h2 { font-size: 1.25em; font-weight: bold; margin-bottom: 0.5em; margin-top: 1em; }
-        .markdown-body h3 { font-size: 1.1em; font-weight: bold; margin-bottom: 0.5em; margin-top: 1em; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* Vis Network specific styles */
+        #network-container { width: 100%; height: 600px; border: 1px solid #e2e8f0; border-radius: 0.5rem; }
+        .dark #network-container { border-color: #334155; }
+
+        /* Glowing Status */
+        .status-glow.connected {
+            box-shadow: 0 0 8px 2px rgba(34, 197, 94, 0.6);
+            background-color: #22c55e;
+        }
+        .status-glow.disconnected {
+            background-color: #ef4444;
+        }
+
+        .markdown-body h1, .markdown-body h2, .markdown-body h3 { font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; }
+        .markdown-body h1 { font-size: 1.5em; }
+        .markdown-body h2 { font-size: 1.25em; }
         .markdown-body p { margin-bottom: 1em; }
-        .markdown-body ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 1em; }
-        .markdown-body ol { list-style-type: decimal; padding-left: 1.5em; margin-bottom: 1em; }
-        .markdown-body strong { font-weight: 600; color: #059669; }
-        .dark .markdown-body strong { color: #10b981; }
-        .markdown-body blockquote { border-left: 4px solid #e2e8f0; padding-left: 1em; color: #64748b; margin-bottom: 1em; }
-        .dark .markdown-body blockquote { border-left-color: #334155; color: #94a3b8; }
-
-        /* Glowing indicator */
-        .glow-green {
-            box-shadow: 0 0 10px 2px rgba(16, 185, 129, 0.6);
-        }
-
-        /* Tree Explorer Styles */
-        details > summary {
-            list-style: none;
-        }
-        details > summary::-webkit-details-marker {
-            display: none;
-        }
-        
-        #network-container canvas {
-            outline: none;
-        }
+        .markdown-body ul { list-style-type: disc; margin-left: 1.5em; margin-bottom: 1em; }
+        .markdown-body strong { font-weight: 600; color: #166534; }
+        .dark .markdown-body strong { color: #4ade80; }
     </style>
 </head>
-<body class="bg-gray-50 text-slate-800 dark:bg-slate-950 dark:text-slate-200 h-screen flex flex-col font-sans transition-colors duration-200 overflow-hidden">
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 h-screen overflow-hidden flex transition-colors duration-200">
 
-    <!-- Top Menu Bar -->
-    <header class="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 h-16 flex items-center justify-between px-4 shrink-0 z-10 relative">
-        <div class="flex items-center gap-6 h-full">
-            <div class="flex items-center gap-2 font-bold text-xl text-eco-600 dark:text-eco-500">
-                <i class="fa-solid fa-leaf"></i> EcoLens
+    <!-- Left Sidebar: Document Management -->
+    <aside class="w-72 bg-eco-900 text-white flex flex-col h-full shrink-0 border-r border-eco-800 relative z-20">
+        <div class="p-6 flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-eco-500 flex items-center justify-center">
+                <i class="ph ph-leaf text-white text-xl"></i>
             </div>
-            
-            <!-- Navigation Tabs -->
-            <nav class="hidden md:flex h-full" id="main-nav">
-                <button onclick="switchTab('chat')" class="nav-tab active h-full px-4 border-b-2 border-eco-500 text-eco-600 dark:text-eco-400 font-medium hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2" data-tab="chat">
-                    <i class="fa-solid fa-comments"></i> Chat Copilot
-                </button>
-                <button onclick="switchTab('explorer')" class="nav-tab h-full px-4 border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2" data-tab="explorer">
-                    <i class="fa-solid fa-network-wired"></i> Concept Explorer
-                </button>
-                <button onclick="switchTab('slides')" class="nav-tab h-full px-4 border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2" data-tab="slides">
-                    <i class="fa-solid fa-person-chalkboard"></i> Slide Deck
-                </button>
-                <button onclick="switchTab('brief')" class="nav-tab h-full px-4 border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2" data-tab="brief">
-                    <i class="fa-solid fa-file-invoice"></i> Research Brief
-                </button>
-                <button onclick="switchTab('map')" class="nav-tab h-full px-4 border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2" data-tab="map">
-                    <i class="fa-solid fa-diagram-project"></i> Knowledge Map
-                </button>
-                <button onclick="switchTab('policy')" class="nav-tab h-full px-4 border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2" data-tab="policy">
-                    <i class="fa-solid fa-scale-balanced"></i> Policy Impact
-                </button>
-            </nav>
+            <h1 class="text-xl font-bold tracking-wide">EcoLens</h1>
         </div>
 
-        <div class="flex items-center gap-4">
-            <!-- API Key Input -->
-            <div class="relative flex items-center">
-                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <i class="fa-solid fa-key text-gray-400"></i>
-                </div>
-                <input type="password" id="api-key-input" placeholder="Gemini API Key" 
-                    class="pl-10 pr-10 py-1.5 border border-gray-300 dark:border-slate-700 rounded-md bg-gray-50 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-eco-500 focus:border-eco-500 outline-none w-48 transition-all dark:text-white"
-                    onchange="updateApiKey(this.value)">
-                <div class="absolute inset-y-0 right-0 pr-3 flex items-center">
-                    <div id="api-status-indicator" class="w-2.5 h-2.5 rounded-full bg-gray-400 transition-all duration-300" title="API Key Status"></div>
-                </div>
-            </div>
+        <div class="flex-1 overflow-y-auto px-4 py-2 flex flex-col gap-6">
             
-            <!-- Dark Mode Toggle -->
-            <button onclick="toggleDarkMode()" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-600 dark:text-gray-300 transition-colors focus:outline-none">
-                <i class="fa-solid fa-moon dark:hidden text-lg"></i>
-                <i class="fa-solid fa-sun hidden dark:block text-lg"></i>
-            </button>
-        </div>
-    </header>
-
-    <div class="flex flex-1 overflow-hidden">
-        <!-- Sidebar: Upload & Selection -->
-        <aside class="w-72 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 flex flex-col shrink-0">
-            <div class="p-4 border-b border-gray-200 dark:border-slate-800">
-                <h2 class="font-semibold text-lg mb-2 flex items-center gap-2">
-                    <i class="fa-regular fa-folder-open text-eco-500"></i> Document Library
-                </h2>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Upload PDFs to build context for EcoLens.</p>
-                
-                <!-- Upload Area -->
-                <div id="drop-zone" class="border-2 border-dashed border-gray-300 dark:border-slate-700 rounded-lg p-6 text-center hover:border-eco-500 dark:hover:border-eco-500 transition-colors cursor-pointer bg-gray-50 dark:bg-slate-800/50" onclick="document.getElementById('file-input').click()">
-                    <i class="fa-solid fa-cloud-arrow-up text-3xl text-gray-400 dark:text-gray-500 mb-2"></i>
-                    <p class="text-sm font-medium">Drag & drop PDFs here</p>
-                    <p class="text-xs text-gray-500 mt-1">or click to browse</p>
-                    <input type="file" id="file-input" multiple accept="application/pdf" class="hidden" onchange="handleFileSelect(event)">
-                </div>
-                
-                <div id="upload-progress" class="hidden mt-3">
-                    <div class="flex justify-between text-xs mb-1">
-                        <span id="upload-filename" class="truncate max-w-[180px]">Processing...</span>
-                        <span id="upload-percent">0%</span>
+            <!-- Upload Area -->
+            <div>
+                <h2 class="text-xs uppercase tracking-wider text-eco-100/60 mb-3 font-semibold">Data Sources</h2>
+                <label for="file-upload" class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-eco-700/50 rounded-xl cursor-pointer bg-eco-800/20 hover:bg-eco-800/50 transition-colors">
+                    <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                        <i class="ph ph-cloud-arrow-up text-3xl text-eco-400 mb-2"></i>
+                        <p class="text-sm text-eco-100"><span class="font-semibold">Click to upload</span> or drag</p>
+                        <p class="text-xs text-eco-100/50 mt-1">PDFs supported</p>
                     </div>
-                    <div class="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-1.5">
-                        <div id="upload-bar" class="bg-eco-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
-                    </div>
-                </div>
+                    <input id="file-upload" type="file" class="hidden" multiple accept="application/pdf" />
+                </label>
             </div>
 
             <!-- Document List -->
-            <div class="flex-1 overflow-y-auto p-4">
-                <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Context Sources</h3>
+            <div class="flex-1">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="text-xs uppercase tracking-wider text-eco-100/60 font-semibold">Active Documents</h2>
+                    <span id="doc-count" class="text-xs bg-eco-800 px-2 py-0.5 rounded-full text-eco-100">0</span>
+                </div>
                 <div id="document-list" class="space-y-2">
                     <!-- Documents will be injected here -->
-                    <div class="text-sm text-gray-500 dark:text-gray-400 text-center py-4 italic" id="empty-docs-msg">
-                        No documents uploaded yet.
+                    <div class="text-sm text-eco-100/40 text-center py-4 italic" id="empty-docs-msg">No documents uploaded yet.</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Impact Metric (Mock) -->
+        <div class="p-4 m-4 bg-eco-800/40 rounded-xl border border-eco-700/50">
+            <div class="flex items-center gap-2 mb-2">
+                <i class="ph-fill ph-plant text-eco-400"></i>
+                <span class="text-xs font-medium text-eco-100">Eco Impact Today</span>
+            </div>
+            <div class="text-2xl font-bold text-white">+2.45 kg</div>
+            <div class="text-xs text-eco-100/60">CO₂e Avoided via insights</div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col h-full min-w-0 bg-gray-50 dark:bg-[#0f172a]">
+        
+        <!-- Top Navigation Bar -->
+        <header class="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-6 shrink-0 z-10 shadow-sm">
+            
+            <!-- Tabs -->
+            <nav class="flex space-x-1" id="main-tabs">
+                <button data-tab="dashboard" class="tab-btn px-4 py-2 text-sm font-medium rounded-lg text-eco-600 dark:text-eco-400 bg-eco-50 dark:bg-eco-900/30 transition-colors">
+                    <i class="ph ph-squares-four mr-1"></i> Dashboard
+                </button>
+                <button data-tab="explorer" class="tab-btn px-4 py-2 text-sm font-medium rounded-lg text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">
+                    <i class="ph ph-tree-structure mr-1"></i> Concept Explorer
+                </button>
+                <button data-tab="slides" class="tab-btn px-4 py-2 text-sm font-medium rounded-lg text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">
+                    <i class="ph ph-presentation-chart mr-1"></i> Slide Deck
+                </button>
+                <button data-tab="brief" class="tab-btn px-4 py-2 text-sm font-medium rounded-lg text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">
+                    <i class="ph ph-article mr-1"></i> Research Brief
+                </button>
+                <button data-tab="map" class="tab-btn px-4 py-2 text-sm font-medium rounded-lg text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">
+                    <i class="ph ph-graph mr-1"></i> Knowledge Map
+                </button>
+                <button data-tab="policy" class="tab-btn px-4 py-2 text-sm font-medium rounded-lg text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">
+                    <i class="ph ph-scale mr-1"></i> Policy Impact
+                </button>
+            </nav>
+
+            <!-- Global Controls -->
+            <div class="flex items-center gap-4">
+                <!-- API Key Input -->
+                <div class="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1 px-2 border border-gray-200 dark:border-gray-600">
+                    <i class="ph ph-key text-gray-400 mr-2"></i>
+                    <input type="password" id="api-key-input" placeholder="Gemini API Key (Optional)" class="bg-transparent border-none text-xs w-48 focus:outline-none dark:text-white placeholder-gray-400">
+                    <div id="api-status" class="w-2.5 h-2.5 rounded-full status-glow disconnected ml-2" title="API Status"></div>
+                </div>
+
+                <button id="theme-toggle" class="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors">
+                    <i class="ph ph-moon text-lg dark:hidden"></i>
+                    <i class="ph ph-sun text-lg hidden dark:block"></i>
+                </button>
+                <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-eco-500 to-blue-500 text-white flex items-center justify-center font-bold text-sm shadow-sm">
+                    U
+                </div>
+            </div>
+        </header>
+
+        <!-- Scrollable Content Area -->
+        <div class="flex-1 overflow-y-auto p-6 relative">
+            
+            <!-- Tab 1: Dashboard (Visual mimic of image) -->
+            <div id="tab-dashboard" class="tab-content active max-w-6xl mx-auto space-y-6">
+                
+                <div class="flex justify-between items-end mb-6">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">AI-Powered Research & Compliance</h2>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Turning environmental data into circular economy opportunities</p>
                     </div>
+                    <button id="run-master-analysis" class="bg-eco-600 hover:bg-eco-700 text-white px-5 py-2.5 rounded-lg font-medium shadow-sm transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="ph ph-magic-wand"></i> Run Master Analysis
+                    </button>
                 </div>
-            </div>
-            
-            <div class="p-4 border-t border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/30">
-                <div class="flex items-center justify-between text-xs text-gray-500">
-                    <span>Active Context:</span>
-                    <span id="active-context-count" class="font-bold text-eco-600 dark:text-eco-400 bg-eco-100 dark:bg-eco-900/50 px-2 py-0.5 rounded-full">0 docs</span>
-                </div>
-            </div>
-        </aside>
 
-        <!-- Main Content Area -->
-        <main class="flex-1 flex flex-col bg-gray-50 dark:bg-slate-950 relative overflow-hidden">
-            
-            <!-- Global Loading Overlay for Tools -->
-            <div id="tool-loading-overlay" class="hidden absolute inset-0 bg-white/80 dark:bg-slate-950/80 z-50 flex flex-col items-center justify-center backdrop-blur-sm">
-                <div class="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-eco-500 mb-4"></div>
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-white" id="tool-loading-text">Analyzing Documents...</h3>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">EcoLens AI is processing the selected context.</p>
-            </div>
-
-            <!-- VIEW 1: Chat Copilot -->
-            <div id="view-chat" class="tab-view flex-1 flex flex-col h-full">
-                <!-- Messages -->
-                <div id="chat-messages" class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
-                    
-                    <!-- Welcome Message -->
-                    <div class="flex gap-4">
-                        <div class="w-10 h-10 rounded-full bg-eco-100 dark:bg-eco-900 flex items-center justify-center shrink-0 border border-eco-200 dark:border-eco-700">
-                            <i class="fa-solid fa-leaf text-eco-600 dark:text-eco-400"></i>
-                        </div>
-                        <div class="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-4 rounded-2xl rounded-tl-none shadow-sm max-w-[85%]">
-                            <h3 class="font-semibold text-gray-800 dark:text-gray-200 mb-2">Welcome to EcoLens Copilot</h3>
-                            <p class="text-gray-600 dark:text-gray-400 text-sm leading-relaxed mb-3">
-                                I am your AI-powered research and compliance assistant. I process environmental data, sustainability reports, and waste datasheets through three analytical layers:
-                            </p>
-                            <div class="flex flex-wrap gap-2 mb-3">
-                                <span class="text-xs bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-1 rounded-md border border-blue-200 dark:border-blue-800"><i class="fa-solid fa-magnifying-glass mr-1"></i> Insight Lens</span>
-                                <span class="text-xs bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 px-2 py-1 rounded-md border border-purple-200 dark:border-purple-800"><i class="fa-solid fa-recycle mr-1"></i> Opportunity Lens</span>
-                                <span class="text-xs bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300 px-2 py-1 rounded-md border border-red-200 dark:border-red-800"><i class="fa-solid fa-shield-halved mr-1"></i> Compliance Lens</span>
+                <div class="grid grid-cols-12 gap-6">
+                    <!-- Center: Pipeline -->
+                    <div class="col-span-12 lg:col-span-8 space-y-6">
+                        <!-- Pipeline Visual -->
+                        <div class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+                            <div class="flex items-center justify-between mb-8">
+                                <h3 class="font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+                                    <i class="ph-fill ph-sparkle text-eco-500"></i> AI Analysis Pipeline
+                                </h3>
+                                <span class="bg-eco-100 text-eco-700 dark:bg-eco-900/50 dark:text-eco-400 text-xs px-2 py-1 rounded-md font-medium">Live</span>
                             </div>
-                            <p class="text-gray-600 dark:text-gray-400 text-sm font-medium">
-                                Please upload and select documents in the sidebar, then ask me anything.
+                            
+                            <!-- Nodes -->
+                            <div class="flex items-center justify-between relative px-8 mb-8">
+                                <div class="absolute top-1/2 left-16 right-16 h-0.5 bg-gray-200 dark:bg-gray-700 -z-10 transform -translate-y-1/2 border-t border-dashed"></div>
+                                
+                                <div class="flex flex-col items-center gap-2 bg-white dark:bg-gray-800">
+                                    <div class="w-12 h-12 rounded-full border-2 border-eco-500 text-eco-500 flex items-center justify-center bg-eco-50 dark:bg-eco-900/20">
+                                        <i class="ph ph-magnifying-glass text-xl"></i>
+                                    </div>
+                                    <span class="text-sm font-medium">Insight Lens</span>
+                                </div>
+                                <div class="flex flex-col items-center gap-2 bg-white dark:bg-gray-800">
+                                    <div class="w-12 h-12 rounded-full border-2 border-blue-500 text-blue-500 flex items-center justify-center bg-blue-50 dark:bg-blue-900/20 shadow-[0_0_15px_rgba(59,130,246,0.3)]">
+                                        <i class="ph ph-arrows-clockwise text-xl"></i>
+                                    </div>
+                                    <span class="text-sm font-medium">Opportunity Lens</span>
+                                </div>
+                                <div class="flex flex-col items-center gap-2 bg-white dark:bg-gray-800">
+                                    <div class="w-12 h-12 rounded-full border-2 border-purple-500 text-purple-500 flex items-center justify-center bg-purple-50 dark:bg-purple-900/20">
+                                        <i class="ph ph-shield-check text-xl"></i>
+                                    </div>
+                                    <span class="text-sm font-medium">Compliance Lens</span>
+                                </div>
+                            </div>
+
+                            <!-- Status Cards -->
+                            <div class="space-y-3" id="pipeline-status-cards">
+                                <!-- Generated by JS -->
+                                <div class="text-center text-sm text-gray-500 py-4 italic">Click 'Run Master Analysis' to process selected documents.</div>
+                            </div>
+                        </div>
+
+                        <!-- Generated Opportunities -->
+                        <div class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+                            <h3 class="font-semibold text-gray-800 dark:text-white mb-4">AI Generated Opportunities</h3>
+                            <div class="grid grid-cols-3 gap-4" id="opportunities-grid">
+                                <!-- Cards injected here -->
+                                <div class="col-span-3 text-center text-sm text-gray-500 py-8 border border-dashed rounded-lg border-gray-200 dark:border-gray-700">Awaiting analysis...</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Compliance & Summary -->
+                    <div class="col-span-12 lg:col-span-4 space-y-6">
+                        <!-- Auditor Log -->
+                        <div class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+                                    <i class="ph ph-shield-check text-eco-600"></i> Compliance Auditor
+                                </h3>
+                            </div>
+                            <div class="space-y-3 text-xs" id="auditor-log">
+                                <div class="text-gray-500 italic">Logs will appear here during analysis.</div>
+                            </div>
+                        </div>
+
+                        <!-- Summary -->
+                        <div class="bg-eco-50 dark:bg-eco-900/20 rounded-xl p-6 border border-eco-100 dark:border-eco-800">
+                            <h3 class="font-semibold text-eco-800 dark:text-eco-400 mb-2 flex items-center gap-2">
+                                <i class="ph-fill ph-sparkle"></i> Executive Summary
+                            </h3>
+                            <p class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed" id="dashboard-summary">
+                                Upload and select documents, then run analysis to generate a synthesis of environmental data and circular economy pathways.
                             </p>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Input Area -->
-                <div class="p-4 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-800 shrink-0">
-                    <form id="chat-form" onsubmit="handleChatSubmit(event)" class="max-w-4xl mx-auto relative">
-                        <textarea id="chat-input" rows="2" placeholder="Ask about materials, compliance risks, or circular economy opportunities..." 
-                            class="w-full bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-xl pl-4 pr-14 py-3 focus:outline-none focus:ring-2 focus:ring-eco-500 focus:border-transparent resize-none text-sm dark:text-white"
-                            onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleChatSubmit(event); }"></textarea>
-                        <button type="submit" id="chat-submit-btn" class="absolute right-3 bottom-3 w-8 h-8 bg-eco-600 hover:bg-eco-700 text-white rounded-lg flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                            <i class="fa-solid fa-paper-plane text-sm"></i>
+            <!-- Tab 2: Concept Explorer -->
+            <div id="tab-explorer" class="tab-content max-w-4xl mx-auto">
+                <div class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700 min-h-[600px]">
+                    <div class="flex justify-between items-center mb-6 border-b border-gray-100 dark:border-gray-700 pb-4">
+                        <h2 class="text-xl font-bold">Interactive Concept Explorer</h2>
+                        <button onclick="generateContent('explorer')" class="bg-blue-500 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2 hover:bg-blue-600">
+                            <i class="ph ph-magic-wand"></i> Generate Wiki
                         </button>
-                    </form>
-                    <div class="text-center mt-2">
-                        <span class="text-[10px] text-gray-400">Powered by Gemini 2.5 Flash</span>
+                    </div>
+                    <div id="explorer-content" class="markdown-body text-gray-800 dark:text-gray-200">
+                        <div class="text-center text-gray-500 mt-20">Click generate to create an expandable knowledge base from the selected documents.</div>
                     </div>
                 </div>
             </div>
 
-            <!-- VIEW 2: Concept Explorer -->
-            <div id="view-explorer" class="tab-view hidden h-full flex flex-col p-6 overflow-hidden">
-                <div class="flex justify-between items-center mb-6 shrink-0">
-                    <div>
-                        <h2 class="text-2xl font-bold text-gray-800 dark:text-white">Interactive Concept Explorer</h2>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">A structured, hierarchical view of knowledge extracted from your documents.</p>
-                    </div>
-                    <button onclick="generateToolContent('explorer')" class="bg-eco-600 hover:bg-eco-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Explorer
-                    </button>
-                </div>
-                <div class="flex-1 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-6 overflow-y-auto shadow-sm" id="explorer-content">
-                    <div class="h-full flex flex-col items-center justify-center text-gray-400">
-                        <i class="fa-solid fa-network-wired text-4xl mb-3"></i>
-                        <p>Click "Generate Explorer" to build a knowledge tree from selected documents.</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- VIEW 3: Slide Deck Generator -->
-            <div id="view-slides" class="tab-view hidden h-full flex flex-col p-6 overflow-hidden">
-                <div class="flex justify-between items-center mb-6 shrink-0">
-                    <div>
-                        <h2 class="text-2xl font-bold text-gray-800 dark:text-white">Beamer / Slide Deck Generator</h2>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Auto-generate a presentation outline from your sustainability data.</p>
-                    </div>
+            <!-- Tab 3: Slide Deck -->
+            <div id="tab-slides" class="tab-content max-w-5xl mx-auto">
+                 <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold">Slide Deck Generator</h2>
                     <div class="flex gap-2">
-                        <button onclick="exportSlidesPdf()" id="btn-export-slides" class="hidden bg-gray-200 hover:bg-gray-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-800 dark:text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors items-center gap-2">
-                            <i class="fa-solid fa-file-pdf text-red-500"></i> Export PDF
+                        <button onclick="generateContent('slides')" class="bg-purple-500 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2 hover:bg-purple-600">
+                            <i class="ph ph-magic-wand"></i> Generate Slides
                         </button>
-                        <button onclick="generateToolContent('slides')" class="bg-eco-600 hover:bg-eco-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
-                            <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Slides
+                        <button onclick="window.print()" class="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                            <i class="ph ph-export"></i> Print / PDF
                         </button>
                     </div>
                 </div>
-                <div class="flex-1 overflow-y-auto" id="slides-container-wrapper">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="slides-content">
-                        <!-- Slides will be rendered here -->
-                        <div class="col-span-full h-64 border-2 border-dashed border-gray-300 dark:border-slate-700 rounded-xl flex flex-col items-center justify-center text-gray-400">
-                            <i class="fa-solid fa-person-chalkboard text-4xl mb-3"></i>
-                            <p>Click "Generate Slides" to create a deck from selected documents.</p>
+                <div id="slides-container" class="grid grid-cols-1 md:grid-cols-2 gap-6 pb-20">
+                    <div class="col-span-full text-center text-gray-500 mt-20">Awaiting generation...</div>
+                </div>
+            </div>
+
+            <!-- Tab 4: Research Brief -->
+            <div id="tab-brief" class="tab-content max-w-3xl mx-auto">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 min-h-[800px] relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-eco-400 to-blue-500"></div>
+                    <div class="p-8">
+                        <div class="flex justify-between items-center mb-8 pb-4 border-b border-gray-100 dark:border-gray-700">
+                            <div>
+                                <p class="text-xs font-bold text-eco-600 dark:text-eco-400 uppercase tracking-wider mb-1">EcoLens Auto-Generated</p>
+                                <h2 class="text-2xl font-serif font-bold">Comprehensive Research Brief</h2>
+                            </div>
+                            <button onclick="generateContent('brief')" class="bg-eco-600 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2 hover:bg-eco-700 shadow-sm">
+                                <i class="ph ph-pen-nib"></i> Draft Brief
+                            </button>
+                        </div>
+                        <div id="brief-content" class="markdown-body font-serif text-gray-800 dark:text-gray-200 text-lg leading-relaxed">
+                            <p class="text-center text-gray-500 italic mt-10">Select documents and click draft to synthesize a formal research brief.</p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- VIEW 4: Research Brief -->
-            <div id="view-brief" class="tab-view hidden h-full flex flex-col p-6 overflow-hidden">
-                <div class="flex justify-between items-center mb-6 shrink-0">
-                    <div>
-                        <h2 class="text-2xl font-bold text-gray-800 dark:text-white">AI Research Brief</h2>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Comprehensive executive summary and action plan.</p>
-                    </div>
-                    <button onclick="generateToolContent('brief')" class="bg-eco-600 hover:bg-eco-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Brief
+            <!-- Tab 5: Knowledge Map -->
+            <div id="tab-map" class="tab-content max-w-6xl mx-auto">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold">Entity & Relationship Map</h2>
+                    <button onclick="generateContent('map')" class="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2 hover:bg-orange-600 shadow-sm">
+                        <i class="ph ph-magic-wand"></i> Extract Graph
                     </button>
                 </div>
-                <div class="flex-1 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-8 overflow-y-auto shadow-sm">
-                    <div id="brief-content" class="markdown-body text-gray-800 dark:text-gray-200 max-w-4xl mx-auto">
-                        <div class="h-full flex flex-col items-center justify-center text-gray-400 mt-20">
-                            <i class="fa-solid fa-file-invoice text-4xl mb-3"></i>
-                            <p>Click "Generate Brief" to synthesize a report from selected documents.</p>
-                        </div>
+                <div class="bg-white dark:bg-gray-800 rounded-xl p-2 shadow-sm border border-gray-200 dark:border-gray-700 relative">
+                    <div id="network-container"></div>
+                    <div id="network-loading" class="absolute inset-0 bg-white/80 dark:bg-gray-800/80 flex flex-col items-center justify-center z-10 hidden rounded-xl backdrop-blur-sm">
+                        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mb-4"></div>
+                        <p class="text-sm font-medium">Extracting entities and relationships from documents...</p>
                     </div>
                 </div>
             </div>
 
-            <!-- VIEW 5: Knowledge Map -->
-            <div id="view-map" class="tab-view hidden h-full flex flex-col p-6 overflow-hidden">
-                <div class="flex justify-between items-center mb-6 shrink-0">
-                    <div>
-                        <h2 class="text-2xl font-bold text-gray-800 dark:text-white">Visual Knowledge Map</h2>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Entity and relationship network extracted from context.</p>
-                    </div>
-                    <button onclick="generateToolContent('map')" class="bg-eco-600 hover:bg-eco-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Map
-                    </button>
-                </div>
-                <div class="flex-1 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm relative">
-                    <div id="network-container" class="w-full h-full bg-slate-50 dark:bg-slate-950">
-                        <div id="map-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 pointer-events-none">
-                            <i class="fa-solid fa-diagram-project text-4xl mb-3"></i>
-                            <p>Click "Generate Map" to visualize connections in your documents.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- VIEW 6: Policy Impact -->
-            <div id="view-policy" class="tab-view hidden h-full flex flex-col p-6 overflow-hidden">
-                <div class="flex flex-col mb-6 shrink-0 bg-white dark:bg-slate-900 p-6 rounded-xl border border-gray-200 dark:border-slate-800 shadow-sm">
-                    <div>
-                        <h2 class="text-2xl font-bold text-gray-800 dark:text-white mb-2">Policy Impact Simulator</h2>
-                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">"If a policy changes, what happens next?" Simulate scenarios against your data.</p>
-                    </div>
-                    <div class="flex gap-3">
-                        <input type="text" id="policy-scenario-input" placeholder="e.g., What if a new tax is applied to non-recyclable packaging?" 
-                            class="flex-1 bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-eco-500 text-sm dark:text-white"
-                            onkeydown="if(event.key === 'Enter') generateToolContent('policy')">
-                        <button onclick="generateToolContent('policy')" class="bg-eco-600 hover:bg-eco-700 text-white px-6 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2 whitespace-nowrap">
-                            <i class="fa-solid fa-flask"></i> Simulate Impact
+            <!-- Tab 6: Policy Impact -->
+            <div id="tab-policy" class="tab-content max-w-4xl mx-auto space-y-6">
+                <div class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+                    <h2 class="text-xl font-bold mb-2 flex items-center gap-2"><i class="ph ph-scale text-red-500"></i> Policy Impact Simulator</h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">"If a policy changes, what happens next?" Input a hypothetical scenario to evaluate risks against your documents.</p>
+                    
+                    <div class="flex gap-4">
+                        <textarea id="policy-input" rows="3" class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg p-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none resize-none transition-all dark:text-white placeholder-gray-400" placeholder="e.g., A new regulation bans all single-use plastics and requires 50% recycled content in packaging by 2028..."></textarea>
+                        <button onclick="generateContent('policy')" class="bg-red-500 text-white px-6 rounded-lg font-medium hover:bg-red-600 transition-colors shrink-0 flex flex-col items-center justify-center gap-1 shadow-sm">
+                            <i class="ph ph-lightning text-xl"></i> Simulate
                         </button>
                     </div>
                 </div>
-                <div class="flex-1 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-8 overflow-y-auto shadow-sm">
-                    <div id="policy-content" class="markdown-body text-gray-800 dark:text-gray-200 max-w-4xl mx-auto">
-                        <div class="h-full flex flex-col items-center justify-center text-gray-400 mt-10">
-                            <i class="fa-solid fa-scale-balanced text-4xl mb-3"></i>
-                            <p>Enter a hypothetical policy change above to analyze its impact.</p>
+
+                <div id="policy-results" class="hidden space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="bg-red-50 dark:bg-red-900/20 p-4 rounded-xl border border-red-200 dark:border-red-800/50">
+                            <h4 class="text-red-800 dark:text-red-400 font-semibold mb-1 text-sm">Critical Risks</h4>
+                            <div id="policy-risks" class="text-sm text-gray-700 dark:text-gray-300">...</div>
                         </div>
+                        <div class="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-xl border border-amber-200 dark:border-amber-800/50">
+                            <h4 class="text-amber-800 dark:text-amber-400 font-semibold mb-1 text-sm">Required Adaptations</h4>
+                            <div id="policy-adapt" class="text-sm text-gray-700 dark:text-gray-300">...</div>
+                        </div>
+                        <div class="bg-eco-50 dark:bg-eco-900/20 p-4 rounded-xl border border-eco-200 dark:border-eco-800/50">
+                            <h4 class="text-eco-800 dark:text-eco-400 font-semibold mb-1 text-sm">New Opportunities</h4>
+                            <div id="policy-opps" class="text-sm text-gray-700 dark:text-gray-300">...</div>
+                        </div>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 shadow-sm">
+                        <h3 class="font-bold mb-4 border-b pb-2 dark:border-gray-700">Detailed Impact Analysis</h3>
+                        <div id="policy-details" class="markdown-body"></div>
                     </div>
                 </div>
             </div>
 
-        </main>
+        </div>
+    </main>
+
+    <!-- Right Sidebar: Contextual Chatbot -->
+    <aside class="w-80 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col h-full shrink-0 shadow-[-4px_0_15px_rgba(0,0,0,0.03)] z-20">
+        <div class="h-16 border-b border-gray-200 dark:border-gray-700 flex items-center px-4 justify-between bg-gray-50 dark:bg-gray-800/50">
+            <div class="flex items-center gap-2">
+                <i class="ph-fill ph-robot text-blue-500 text-xl"></i>
+                <h3 class="font-semibold">EcoLens Assistant</h3>
+            </div>
+            <span class="text-[10px] uppercase bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300 px-2 py-0.5 rounded font-bold tracking-wider">Gemini 2.5 Flash</span>
+        </div>
+
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4 text-sm bg-gray-50/50 dark:bg-gray-900/50">
+            <!-- Initial Greeting -->
+            <div class="flex gap-3">
+                <div class="w-6 h-6 rounded bg-blue-100 dark:bg-blue-900 flex items-center justify-center shrink-0 mt-1">
+                    <i class="ph-fill ph-robot text-blue-600 dark:text-blue-400 text-xs"></i>
+                </div>
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-3 rounded-xl rounded-tl-none shadow-sm text-gray-800 dark:text-gray-200">
+                    Hello! I'm your AI Research Copilot. Upload documents on the left, select them, and ask me anything. I will cite specific pages in my answers.
+                </div>
+            </div>
+        </div>
+
+        <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+            <div class="relative flex items-center">
+                <textarea id="chat-input" rows="1" class="w-full bg-gray-100 dark:bg-gray-700 border-none rounded-2xl py-3 pl-4 pr-12 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none dark:text-white placeholder-gray-400 shadow-inner" placeholder="Ask about the documents..."></textarea>
+                <button id="send-btn" class="absolute right-2 w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center hover:bg-blue-600 transition-colors shadow-sm disabled:opacity-50">
+                    <i class="ph ph-paper-plane-right"></i>
+                </button>
+            </div>
+            <p class="text-[10px] text-center text-gray-400 mt-2">Answers are grounded in selected documents.</p>
+        </div>
+    </aside>
+
+    <!-- UI Overlay for Global Loading -->
+    <div id="global-loader" class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 hidden flex-col items-center justify-center text-white">
+        <i class="ph ph-spinner-gap animate-spin text-5xl mb-4 text-eco-500"></i>
+        <p class="text-lg font-medium" id="loader-text">Analyzing documents...</p>
     </div>
 
-    <!-- Application Logic -->
+    <!-- Scripts -->
     <script>
         // --- State Management ---
-        const State = {
-            apiKey: '',
-            documents: [], // { id, name, fullText, pages: [{pageNum, text}] }
-            selectedDocIds: new Set(),
-            chatHistory: [],
-            isDarkMode: document.documentElement.classList.contains('dark'),
-            networkInstance: null,
-            isGenerating: false
+        const state = {
+            documents: [], // Array of { id, name, file, textPages: [{page, text}], selected }
+            activeTab: 'dashboard',
+            isDark: document.documentElement.classList.contains('dark'),
+            networkInstance: null
         };
 
-        // Attempt to get API key from environment if available (fallback)
-        const envApiKey = typeof apiKey !== 'undefined' ? apiKey : '';
-        if (envApiKey) {
-            State.apiKey = envApiKey;
-            document.getElementById('api-key-input').value = envApiKey;
-            updateApiIndicator();
+        // --- DOM Elements ---
+        const elements = {
+            fileInput: document.getElementById('file-upload'),
+            docList: document.getElementById('document-list'),
+            docCount: document.getElementById('doc-count'),
+            emptyDocsMsg: document.getElementById('empty-docs-msg'),
+            apiKeyInput: document.getElementById('api-key-input'),
+            apiStatus: document.getElementById('api-status'),
+            themeToggle: document.getElementById('theme-toggle'),
+            tabs: document.querySelectorAll('.tab-btn'),
+            tabContents: document.querySelectorAll('.tab-content'),
+            chatInput: document.getElementById('chat-input'),
+            sendBtn: document.getElementById('send-btn'),
+            chatMessages: document.getElementById('chat-messages'),
+            globalLoader: document.getElementById('global-loader'),
+            loaderText: document.getElementById('loader-text')
+        };
+
+        // --- Initialization ---
+        function init() {
+            setupEventListeners();
+            checkApiKeyStatus();
+            // Optional: Initialize empty network for visual placeholder
+            initNetwork([]);
         }
 
-        // --- Core Functions ---
+        // --- Event Listeners ---
+        function setupEventListeners() {
+            // Theme toggle
+            elements.themeToggle.addEventListener('click', () => {
+                document.documentElement.classList.toggle('dark');
+                state.isDark = document.documentElement.classList.contains('dark');
+            });
 
-        function toggleDarkMode() {
-            State.isDarkMode = !State.isDarkMode;
-            if (State.isDarkMode) {
-                document.documentElement.classList.add('dark');
-                document.documentElement.classList.remove('light');
+            // Tabs
+            elements.tabs.forEach(btn => {
+                btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+            });
+
+            // File Upload
+            elements.fileInput.addEventListener('change', handleFileUpload);
+
+            // API Key input (just UI feedback)
+            elements.apiKeyInput.addEventListener('input', checkApiKeyStatus);
+
+            // Chat input behavior (Enter to send)
+            elements.chatInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendChat();
+                }
+            });
+            elements.sendBtn.addEventListener('click', handleSendChat);
+
+            // Master Analysis Button
+            document.getElementById('run-master-analysis').addEventListener('click', runDashboardAnalysis);
+        }
+
+        function checkApiKeyStatus() {
+            // Check UI input first, then environment variable
+            let key = elements.apiKeyInput.value.trim();
+            if (!key && typeof apiKey !== 'undefined') key = apiKey;
+            
+            if (key.length > 10) {
+                elements.apiStatus.classList.remove('disconnected');
+                elements.apiStatus.classList.add('connected');
             } else {
-                document.documentElement.classList.add('light');
-                document.documentElement.classList.remove('dark');
-            }
-        }
-
-        function updateApiKey(val) {
-            State.apiKey = val.trim();
-            updateApiIndicator();
-        }
-
-        function updateApiIndicator() {
-            const indicator = document.getElementById('api-status-indicator');
-            if (State.apiKey.length > 10) {
-                indicator.classList.remove('bg-gray-400', 'bg-red-500');
-                indicator.classList.add('bg-eco-500', 'glow-green');
-            } else {
-                indicator.classList.remove('bg-eco-500', 'glow-green', 'bg-red-500');
-                indicator.classList.add('bg-gray-400');
+                elements.apiStatus.classList.remove('connected');
+                elements.apiStatus.classList.add('disconnected');
             }
         }
 
         function switchTab(tabId) {
-            // Update nav buttons
-            document.querySelectorAll('.nav-tab').forEach(btn => {
-                if (btn.dataset.tab === tabId) {
-                    btn.classList.add('border-eco-500', 'text-eco-600', 'dark:text-eco-400');
-                    btn.classList.remove('border-transparent', 'text-gray-500', 'dark:text-gray-400');
-                } else {
-                    btn.classList.remove('border-eco-500', 'text-eco-600', 'dark:text-eco-400');
-                    btn.classList.add('border-transparent', 'text-gray-500', 'dark:text-gray-400');
+            elements.tabs.forEach(b => {
+                b.classList.remove('text-eco-600', 'dark:text-eco-400', 'bg-eco-50', 'dark:bg-eco-900/30');
+                b.classList.add('text-gray-500', 'hover:text-gray-900', 'dark:text-gray-400', 'dark:hover:text-white');
+                if(b.dataset.tab === tabId) {
+                    b.classList.remove('text-gray-500', 'hover:text-gray-900', 'dark:text-gray-400', 'dark:hover:text-white');
+                    b.classList.add('text-eco-600', 'dark:text-eco-400', 'bg-eco-50', 'dark:bg-eco-900/30');
                 }
             });
 
-            // Update views
-            document.querySelectorAll('.tab-view').forEach(view => {
-                view.classList.add('hidden');
+            elements.tabContents.forEach(c => {
+                c.classList.remove('active');
+                if(c.id === `tab-${tabId}`) c.classList.add('active');
             });
-            document.getElementById(`view-${tabId}`).classList.remove('hidden');
+            state.activeTab = tabId;
 
-            // Specific logic on tab switch
-            if (tabId === 'map' && State.networkInstance) {
-                State.networkInstance.redraw();
+            // Fix network canvas resize issue when unhidden
+            if(tabId === 'map' && state.networkInstance) {
+                setTimeout(() => state.networkInstance.fit(), 100);
             }
         }
 
-        // --- PDF Processing Logic ---
+        // --- Document Processing (PDF.js) ---
+        async function handleFileUpload(e) {
+            const files = Array.from(e.target.files);
+            if(files.length === 0) return;
 
-        const dropZone = document.getElementById('drop-zone');
-        
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('border-eco-500', 'bg-eco-50', 'dark:bg-eco-900/20');
-        });
-        
-        dropZone.addEventListener('dragleave', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('border-eco-500', 'bg-eco-50', 'dark:bg-eco-900/20');
-        });
-        
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('border-eco-500', 'bg-eco-50', 'dark:bg-eco-900/20');
-            if (e.dataTransfer.files.length > 0) {
-                processFiles(e.dataTransfer.files);
-            }
-        });
-
-        function handleFileSelect(e) {
-            if (e.target.files.length > 0) {
-                processFiles(e.target.files);
-            }
-            e.target.value = ''; // Reset input
-        }
-
-        async function processFiles(files) {
-            const progressDiv = document.getElementById('upload-progress');
-            const bar = document.getElementById('upload-bar');
-            const percentText = document.getElementById('upload-percent');
-            const nameText = document.getElementById('upload-filename');
+            showLoader('Extracting text from PDFs...');
             
-            progressDiv.classList.remove('hidden');
-
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                if (file.type !== 'application/pdf') {
-                    alert(`Skipping ${file.name}: Not a PDF file.`);
-                    continue;
-                }
-
-                nameText.textContent = file.name;
-                bar.style.width = '10%';
-                percentText.textContent = '10%';
-
+            for (const file of files) {
                 try {
-                    const arrayBuffer = await file.arrayBuffer();
-                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                    
-                    let fullText = '';
-                    let pages = [];
-                    const totalPages = pdf.numPages;
-
-                    for (let j = 1; j <= totalPages; j++) {
-                        const page = await pdf.getPage(j);
-                        const textContent = await page.getTextContent();
-                        const pageText = textContent.items.map(item => item.str).join(' ');
-                        
-                        fullText += pageText + '\n\n';
-                        pages.push({ pageNum: j, text: pageText });
-
-                        const progress = 10 + Math.floor((j / totalPages) * 90);
-                        bar.style.width = `${progress}%`;
-                        percentText.textContent = `${progress}%`;
-                    }
-
-                    const docId = 'doc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-                    const newDoc = {
-                        id: docId,
+                    const textPages = await extractTextFromPDF(file);
+                    const doc = {
+                        id: Math.random().toString(36).substr(2, 9),
                         name: file.name,
-                        fullText: fullText,
-                        pages: pages,
-                        size: (file.size / (1024*1024)).toFixed(2) + ' MB'
+                        file: file,
+                        textPages: textPages,
+                        selected: true // Auto select new uploads
                     };
-
-                    State.documents.push(newDoc);
-                    State.selectedDocIds.add(docId); // Auto select
-
-                } catch (error) {
-                    console.error("Error parsing PDF:", error);
-                    alert(`Error parsing ${file.name}`);
+                    state.documents.push(doc);
+                } catch (err) {
+                    console.error("Error parsing PDF:", err);
+                    alert(`Failed to parse ${file.name}`);
                 }
             }
-
-            setTimeout(() => {
-                progressDiv.classList.add('hidden');
-                bar.style.width = '0%';
-                renderDocumentList();
-            }, 500);
+            
+            updateDocumentListUI();
+            hideLoader();
+            e.target.value = ''; // reset
         }
 
-        function renderDocumentList() {
-            const listEl = document.getElementById('document-list');
-            const emptyMsg = document.getElementById('empty-docs-msg');
+        async function extractTextFromPDF(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            const pages = [];
+
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                const text = textContent.items.map(item => item.str).join(' ');
+                pages.push({ page: i, text: text });
+            }
+            return pages;
+        }
+
+        function updateDocumentListUI() {
+            elements.docList.innerHTML = '';
+            elements.docCount.textContent = state.documents.length;
             
-            if (State.documents.length === 0) {
-                emptyMsg.style.display = 'block';
-                listEl.innerHTML = '';
-                listEl.appendChild(emptyMsg);
-                document.getElementById('active-context-count').textContent = '0 docs';
+            if (state.documents.length === 0) {
+                elements.emptyDocsMsg.style.display = 'block';
                 return;
             }
+            elements.emptyDocsMsg.style.display = 'none';
 
-            emptyMsg.style.display = 'none';
-            listEl.innerHTML = '';
-
-            State.documents.forEach(doc => {
-                const isSelected = State.selectedDocIds.has(doc.id);
+            state.documents.forEach((doc, index) => {
                 const div = document.createElement('div');
-                div.className = `flex items-center gap-3 p-2 rounded-lg border cursor-pointer transition-colors ${isSelected ? 'bg-eco-50 border-eco-200 dark:bg-eco-900/20 dark:border-eco-800' : 'bg-white border-gray-200 hover:bg-gray-50 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700'}`;
-                div.onclick = (e) => {
-                    if (e.target.tagName !== 'INPUT') toggleDocumentSelection(doc.id);
-                };
-
+                div.className = `flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${doc.selected ? 'bg-eco-800/80 border-eco-500 shadow-sm' : 'bg-eco-800/20 border-transparent hover:bg-eco-800/40'}`;
+                
                 div.innerHTML = `
-                    <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleDocumentSelection('${doc.id}')" class="w-4 h-4 text-eco-600 rounded border-gray-300 focus:ring-eco-500 cursor-pointer">
-                    <div class="flex-1 min-w-0">
-                        <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate" title="${doc.name}">${doc.name}</p>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">${doc.pages.length} pages • ${doc.size}</p>
+                    <div class="flex items-center justify-center w-5 h-5 rounded border ${doc.selected ? 'bg-eco-500 border-eco-500' : 'border-eco-600'} text-white shrink-0">
+                        ${doc.selected ? '<i class="ph ph-check text-xs"></i>' : ''}
                     </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-white truncate" title="${doc.name}">${doc.name}</p>
+                        <p class="text-[10px] text-eco-200/60">${doc.textPages.length} pages</p>
+                    </div>
+                    <button class="text-eco-400 hover:text-red-400 p-1 rounded" onclick="removeDoc('${doc.id}', event)" title="Remove">
+                        <i class="ph ph-trash"></i>
+                    </button>
                 `;
-                listEl.appendChild(div);
-            });
+                
+                // Toggle selection
+                div.addEventListener('click', (e) => {
+                    if(!e.target.closest('button')) {
+                        doc.selected = !doc.selected;
+                        updateDocumentListUI();
+                    }
+                });
 
-            document.getElementById('active-context-count').textContent = `${State.selectedDocIds.size} docs`;
+                elements.docList.appendChild(div);
+            });
         }
 
-        function toggleDocumentSelection(docId) {
-            if (State.selectedDocIds.has(docId)) {
-                State.selectedDocIds.delete(docId);
-            } else {
-                State.selectedDocIds.add(docId);
-            }
-            renderDocumentList();
+        window.removeDoc = (id, event) => {
+            event.stopPropagation();
+            state.documents = state.documents.filter(d => d.id !== id);
+            updateDocumentListUI();
         }
 
         function getSelectedContext() {
-            if (State.selectedDocIds.size === 0) return null;
-            
-            let contextStr = "--- CONTEXT DOCUMENTS ---\n\n";
-            State.documents.forEach(doc => {
-                if (State.selectedDocIds.has(doc.id)) {
-                    contextStr += `[DOCUMENT: ${doc.name}]\n`;
-                    // Limit context to prevent massive token overflow. Simple approach: take first few pages or chunk.
-                    // For this prototype, we'll try to include as much as possible, Gemini 2.5 Flash has a large window.
-                    // But to be safe, truncate if excessively large.
-                    let docText = doc.fullText.substring(0, 100000); // Rough limit
-                    contextStr += docText + "\n\n";
-                }
+            const selectedDocs = state.documents.filter(d => d.selected);
+            if (selectedDocs.length === 0) return null;
+
+            let context = "--- CONTEXT FROM UPLOADED DOCUMENTS ---\n\n";
+            selectedDocs.forEach(doc => {
+                context += `Document Name: ${doc.name}\n`;
+                // To avoid massive context limits, we might want to truncate if too large, 
+                // but Gemini 2.5 Flash has 1M context. We'll send it all for this prototype.
+                doc.textPages.forEach(p => {
+                    // Clean up extra spaces
+                    const cleanText = p.text.replace(/\s+/g, ' ').trim();
+                    if(cleanText.length > 10) { // skip empty pages
+                         context += `[Source: ${doc.name}, Page: ${p.page}]\n${cleanText}\n\n`;
+                    }
+                });
+                context += "----------\n";
             });
-            contextStr += "--- END CONTEXT ---\n";
-            return contextStr;
+            return context;
         }
 
-        // --- Gemini API Call with Retry Logic ---
-
-        async function callGemini(prompt, systemInstruction = null, isJson = false) {
-            if (!State.apiKey) {
-                throw new Error("API Key is missing. Please enter your Gemini API Key.");
+        // --- Gemini API Call Wrapper ---
+        async function callGeminiAPI(prompt, systemInstruction = "", expectJson = false) {
+            // Get key from UI or Environment
+            let currentKey = elements.apiKeyInput.value.trim();
+            if (!currentKey && typeof apiKey !== 'undefined') {
+                currentKey = apiKey;
             }
 
-            const model = "gemini-2.0-flash"; 
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${State.apiKey}`;
+            if (!currentKey) {
+                throw new Error("No API Key provided. Please enter a key in the top bar or ensure environment variable is set.");
+            }
 
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${currentKey}`;
+            
             const payload = {
-                contents: [{ parts: [{ text: prompt }] }]
+                contents: [{ parts: [{ text: prompt }] }],
+                systemInstruction: { parts: [{ text: systemInstruction || "You are EcoLens, an advanced AI for environmental data analysis and circular economy opportunities." }] }
             };
 
-            if (systemInstruction) {
-                payload.systemInstruction = { parts: [{ text: systemInstruction }] };
-            }
-
-            if (isJson) {
+            if (expectJson) {
                 payload.generationConfig = { responseMimeType: "application/json" };
             }
 
-            const maxRetries = 5;
-            const baseDelay = 1000;
+            const maxRetries = 3; // Reduced from 5 for snappier UI in prototype
+            let delay = 1000;
 
-            for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            for (let i = 0; i < maxRetries; i++) {
                 try {
                     const response = await fetch(url, {
                         method: 'POST',
@@ -622,429 +663,367 @@
                     });
 
                     if (!response.ok) {
-                        const errText = await response.text();
-                        if (response.status === 400 && errText.includes("API key not valid")) {
-                           document.getElementById('api-status-indicator').classList.add('bg-red-500');
-                           document.getElementById('api-status-indicator').classList.remove('bg-eco-500', 'glow-green');
-                           throw new Error("Invalid API Key provided.");
+                        const errorData = await response.json();
+                        throw new Error(`API Error: ${response.status} - ${errorData.error?.message || 'Unknown'}`);
+                    }
+
+                    const data = await response.json();
+                    let textResult = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                    
+                    if (!textResult) throw new Error("Empty response from API");
+
+                    if (expectJson) {
+                        try {
+                            return JSON.parse(textResult);
+                        } catch (e) {
+                            console.error("Failed to parse JSON response:", textResult);
+                            throw new Error("API did not return valid JSON.");
                         }
-                        throw new Error(`HTTP error! status: ${response.status} - ${errText}`);
-                    }
-
-                    const result = await response.json();
-                    
-                    if (!result.candidates || result.candidates.length === 0) {
-                        throw new Error("No response candidates received from API.");
-                    }
-
-                    let textResult = result.candidates[0].content.parts[0].text;
-                    
-                    // If JSON was requested, try to clean it just in case the model wrapped it
-                    if (isJson) {
-                         textResult = textResult.replace(/^```json\s*/, '').replace(/\s*```$/, '');
                     }
                     return textResult;
 
                 } catch (error) {
-                    if (attempt === maxRetries || error.message.includes("Invalid API Key")) {
-                        throw error;
-                    }
-                    const delay = baseDelay * Math.pow(2, attempt);
+                    console.error(`Attempt ${i + 1} failed:`, error.message);
+                    if (i === maxRetries - 1) throw error;
                     await new Promise(r => setTimeout(r, delay));
+                    delay *= 2;
                 }
             }
         }
 
-        // --- Chat Logic ---
+        // --- Feature Implementations ---
 
-        const EcoLensPersona = `You are EcoLens, an advanced AI-powered research and compliance assistant. Your core function is to transform environmental data, sustainability reports, and waste datasheets into actionable circular economy opportunities. 
-You operate through three integrated lenses:
-1. Insight Lens: Extract and summarize key material compositions, waste generation, and environmental metrics.
-2. Opportunity Lens: Identify high-value circular economy pathways (e.g., reuse, biochar, compost, upcycling) for identified waste streams.
-3. Compliance Lens: Evaluate risks and check alignment with environmental regulations based on the data.
+        // 1. Dashboard Master Analysis
+        async function runDashboardAnalysis() {
+            const context = getSelectedContext();
+            if (!context) return alert("Please select at least one document from the sidebar.");
 
-Rules:
-- ALWAYS base your answers strictly on the provided Context Documents.
-- When you use information from the context, provide a citation format like [Doc: Filename].
-- If the user asks something completely unrelated to the context, politely remind them to ask about the uploaded documents, but you may provide a brief general answer if helpful.
-- Structure your responses cleanly using Markdown, bolding key terms, and using lists for readability.`;
-
-        async function handleChatSubmit(e) {
-            e.preventDefault();
-            const inputEl = document.getElementById('chat-input');
-            const message = inputEl.value.trim();
-            if (!message) return;
-
-            const submitBtn = document.getElementById('chat-submit-btn');
-            inputEl.value = '';
-            inputEl.style.height = 'auto'; // reset height
-            submitBtn.disabled = true;
-
-            appendMessage('user', message);
+            const btn = document.getElementById('run-master-analysis');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="ph ph-spinner animate-spin"></i> Processing...';
             
-            const contextStr = getSelectedContext();
-            if (!contextStr) {
-                appendMessage('ai', "⚠️ Please upload and select at least one document from the sidebar to analyze.");
-                submitBtn.disabled = false;
-                return;
-            }
-
-            const prompt = `${contextStr}\n\nUser Query: ${message}`;
-            
-            // Show loading bubble
-            const loadingId = 'msg-loading-' + Date.now();
-            appendLoadingMessage(loadingId);
-
-            try {
-                const response = await callGemini(prompt, EcoLensPersona, false);
-                removeLoadingMessage(loadingId);
-                appendMessage('ai', response);
-            } catch (error) {
-                removeLoadingMessage(loadingId);
-                appendMessage('ai', `❌ Error: ${error.message}`);
-                if(error.message.includes("API Key is missing")) {
-                     document.getElementById('api-key-input').focus();
-                }
-            } finally {
-                submitBtn.disabled = false;
-            }
-        }
-
-        function appendMessage(role, content) {
-            const container = document.getElementById('chat-messages');
-            const div = document.createElement('div');
-            div.className = 'flex gap-4 animate-fade-in';
-            
-            if (role === 'user') {
-                div.classList.add('flex-row-reverse');
-                div.innerHTML = `
-                    <div class="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0">
-                        <i class="fa-solid fa-user text-slate-500 dark:text-slate-300"></i>
+            // UI Updates - Simulating the 3 lenses
+            const pipelineContainer = document.getElementById('pipeline-status-cards');
+            pipelineContainer.innerHTML = `
+                <div class="border border-gray-100 dark:border-gray-700 rounded-lg p-4 flex gap-4 bg-gray-50/50 dark:bg-gray-800/50">
+                    <div class="w-8 h-8 rounded bg-eco-100 text-eco-600 flex items-center justify-center shrink-0"><i class="ph ph-magnifying-glass"></i></div>
+                    <div>
+                        <div class="flex items-center gap-2 mb-1"><h4 class="font-medium text-sm">Insight Lens</h4> <span class="text-[10px] bg-green-100 text-green-700 px-1.5 rounded animate-pulse">Running</span></div>
+                        <p class="text-xs text-gray-500">Extracting key materials and composition data...</p>
                     </div>
-                    <div class="bg-eco-600 text-white p-4 rounded-2xl rounded-tr-none shadow-sm max-w-[85%]">
-                        <p class="text-sm whitespace-pre-wrap">${escapeHtml(content)}</p>
-                    </div>
-                `;
-            } else {
-                const parsedContent = DOMPurify.sanitize(marked.parse(content));
-                div.innerHTML = `
-                    <div class="w-10 h-10 rounded-full bg-eco-100 dark:bg-eco-900 flex items-center justify-center shrink-0 border border-eco-200 dark:border-eco-700">
-                        <i class="fa-solid fa-leaf text-eco-600 dark:text-eco-400"></i>
-                    </div>
-                    <div class="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-4 rounded-2xl rounded-tl-none shadow-sm max-w-[85%] markdown-body text-sm overflow-hidden">
-                        ${parsedContent}
-                    </div>
-                `;
-            }
-            
-            container.appendChild(div);
-            container.scrollTop = container.scrollHeight;
-        }
-
-        function appendLoadingMessage(id) {
-            const container = document.getElementById('chat-messages');
-            const div = document.createElement('div');
-            div.id = id;
-            div.className = 'flex gap-4 animate-fade-in';
-            div.innerHTML = `
-                <div class="w-10 h-10 rounded-full bg-eco-100 dark:bg-eco-900 flex items-center justify-center shrink-0 border border-eco-200 dark:border-eco-700">
-                    <i class="fa-solid fa-leaf text-eco-600 dark:text-eco-400 animate-pulse"></i>
-                </div>
-                <div class="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 p-4 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-2">
-                    <div class="w-2 h-2 bg-eco-400 rounded-full animate-bounce" style="animation-delay: 0s"></div>
-                    <div class="w-2 h-2 bg-eco-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
-                    <div class="w-2 h-2 bg-eco-400 rounded-full animate-bounce" style="animation-delay: 0.4s"></div>
                 </div>
             `;
-            container.appendChild(div);
-            container.scrollTop = container.scrollHeight;
+
+            // Logs
+            const logContainer = document.getElementById('auditor-log');
+            logContainer.innerHTML = `<div class="flex items-center justify-between"><span class="text-gray-600 dark:text-gray-400">Initiating document scan...</span> <span class="text-[10px] bg-gray-200 dark:bg-gray-700 px-2 rounded">Pending</span></div>`;
+
+
+            const systemPrompt = `You are EcoLens AI. Analyze the provided environmental/waste documents. Extract materials, suggest circular economy opportunities, and identify compliance themes. Return STRICTLY JSON with this schema:
+            {
+                "summary": "2-3 sentence executive summary of findings",
+                "opportunities": [
+                    { "title": "...", "feasibility": "High|Medium|Low (number%)", "impact": "High|Medium|Low", "description": "short description" }
+                ],
+                "logs": [
+                    { "action": "Analyzing emission data...", "status": "Compliant|Warning|Risk" }
+                ]
+            }`;
+
+            const prompt = `Based on this context:\n${context}\n\nPerform analysis.`;
+
+            try {
+                const result = await callGeminiAPI(prompt, systemPrompt, true);
+                
+                // Update Pipeline UI to completed
+                pipelineContainer.innerHTML = `
+                    <div class="border border-green-100 bg-green-50 dark:border-green-900/50 dark:bg-green-900/10 rounded-lg p-4 flex gap-4 mb-2">
+                        <div class="w-8 h-8 rounded bg-green-100 text-green-600 dark:bg-green-800 dark:text-green-300 flex items-center justify-center shrink-0"><i class="ph ph-check-circle"></i></div>
+                        <div>
+                            <div class="flex items-center gap-2 mb-1"><h4 class="font-medium text-sm">Insight Lens</h4> <span class="text-[10px] bg-green-100 text-green-700 px-1.5 rounded">Completed</span></div>
+                            <p class="text-xs text-gray-600 dark:text-gray-400">Materials extracted successfully.</p>
+                        </div>
+                    </div>
+                    <div class="border border-blue-100 bg-blue-50 dark:border-blue-900/50 dark:bg-blue-900/10 rounded-lg p-4 flex gap-4 mb-2">
+                         <div class="w-8 h-8 rounded bg-blue-100 text-blue-600 dark:bg-blue-800 dark:text-blue-300 flex items-center justify-center shrink-0"><i class="ph ph-check-circle"></i></div>
+                        <div>
+                            <div class="flex items-center gap-2 mb-1"><h4 class="font-medium text-sm">Opportunity Lens</h4> <span class="text-[10px] bg-blue-100 text-blue-700 px-1.5 rounded">Completed</span></div>
+                            <p class="text-xs text-gray-600 dark:text-gray-400">Circular pathways identified.</p>
+                        </div>
+                    </div>
+                     <div class="border border-purple-100 bg-purple-50 dark:border-purple-900/50 dark:bg-purple-900/10 rounded-lg p-4 flex gap-4">
+                         <div class="w-8 h-8 rounded bg-purple-100 text-purple-600 dark:bg-purple-800 dark:text-purple-300 flex items-center justify-center shrink-0"><i class="ph ph-check-circle"></i></div>
+                        <div>
+                            <div class="flex items-center gap-2 mb-1"><h4 class="font-medium text-sm">Compliance Lens</h4> <span class="text-[10px] bg-purple-100 text-purple-700 px-1.5 rounded">Completed</span></div>
+                            <p class="text-xs text-gray-600 dark:text-gray-400">Regulatory checks finished.</p>
+                        </div>
+                    </div>
+                `;
+
+                // Update Summary
+                document.getElementById('dashboard-summary').innerText = result.summary;
+
+                // Update Opportunities
+                const oppsGrid = document.getElementById('opportunities-grid');
+                oppsGrid.innerHTML = '';
+                (result.opportunities || []).slice(0,3).forEach(opp => {
+                    let badgeColor = opp.impact.toLowerCase().includes('high') ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800';
+                    let iconColor = opp.impact.toLowerCase().includes('high') ? 'text-green-500' : 'text-orange-500';
+                    
+                    oppsGrid.innerHTML += `
+                        <div class="bg-gray-50 dark:bg-gray-800/80 rounded-xl p-4 border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow">
+                            <div class="flex justify-between items-start mb-3">
+                                <h4 class="font-bold text-sm text-gray-800 dark:text-white flex items-center gap-1"><i class="ph-fill ph-leaf ${iconColor}"></i> ${opp.title}</h4>
+                            </div>
+                            <p class="text-xs text-gray-500 mb-4 line-clamp-2">${opp.description}</p>
+                            <div class="flex justify-between items-center text-[10px] font-medium">
+                                <span class="text-gray-500">Feasibility: ${opp.feasibility}</span>
+                                <span class="${badgeColor} dark:bg-opacity-20 px-2 py-1 rounded">${opp.impact} Impact</span>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                // Update Logs
+                logContainer.innerHTML = '';
+                (result.logs || []).forEach(log => {
+                    let color = 'text-green-500 bg-green-50';
+                    if(log.status.toLowerCase().includes('risk')) color = 'text-red-500 bg-red-50';
+                    if(log.status.toLowerCase().includes('warning')) color = 'text-orange-500 bg-orange-50';
+                    
+                    logContainer.innerHTML += `
+                        <div class="flex items-center justify-between border-b border-dashed border-gray-100 dark:border-gray-700 pb-2 last:border-0">
+                            <span class="text-gray-600 dark:text-gray-400 truncate pr-2" title="${log.action}">${log.action}</span> 
+                            <span class="text-[10px] ${color} dark:bg-opacity-10 px-2 py-0.5 rounded font-medium border border-current/20">${log.status}</span>
+                        </div>
+                    `;
+                });
+
+            } catch (error) {
+                alert("Analysis failed: " + error.message);
+                pipelineContainer.innerHTML = `<div class="text-red-500 text-sm py-4">Error processing analysis. Check API Key.</div>`;
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="ph ph-magic-wand"></i> Re-run Analysis';
+            }
         }
 
-        function removeLoadingMessage(id) {
-            const el = document.getElementById(id);
-            if (el) el.remove();
-        }
+        // Generic Generator Function for other tabs
+        async function generateContent(type) {
+            const context = getSelectedContext();
+            if (!context) return alert("Please select at least one document.");
 
-        function escapeHtml(unsafe) {
-            return unsafe
-                 .replace(/&/g, "&amp;")
-                 .replace(/</g, "&lt;")
-                 .replace(/>/g, "&gt;")
-                 .replace(/"/g, "&quot;")
-                 .replace(/'/g, "&#039;");
-        }
+            let prompt = "";
+            let systemInstruction = "";
+            let expectJson = false;
 
-        // Auto-resize textarea
-        document.getElementById('chat-input').addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = (this.scrollHeight < 120 ? this.scrollHeight : 120) + 'px';
-        });
-
-        // --- Tab Content Generators (Agentic Tools) ---
-
-        function showToolLoading(text) {
-            document.getElementById('tool-loading-text').textContent = text;
-            document.getElementById('tool-loading-overlay').classList.remove('hidden');
-            State.isGenerating = true;
-        }
-
-        function hideToolLoading() {
-            document.getElementById('tool-loading-overlay').classList.add('hidden');
-            State.isGenerating = false;
-        }
-
-        async function generateToolContent(type) {
-            if (State.isGenerating) return;
-
-            const contextStr = getSelectedContext();
-            if (!contextStr && type !== 'policy') { // Policy might ask generally, but better with context
-                alert("Please select at least one document to analyze.");
-                return;
+            if (type === 'explorer') {
+                showLoader('Building Concept Wiki...');
+                systemInstruction = "Create a structured, nested markdown format suitable for a wiki/explorer. Use headings (H1, H2) for main concepts, bullet points for details. Extract main themes from documents.";
+                prompt = `Context:\n${context}\n\nGenerate a comprehensive Concept Explorer markdown.`;
+            } else if (type === 'brief') {
+                showLoader('Drafting Research Brief...');
+                systemInstruction = "Write a formal, comprehensive research brief based on the documents. Include: Executive Summary, Key Findings, Methodology (if applicable), and Recommendations. Use Markdown. Cite sources inline as [DocName, Page X].";
+                prompt = `Context:\n${context}\n\nGenerate research brief.`;
+            } else if (type === 'slides') {
+                showLoader('Generating Presentation...');
+                expectJson = true;
+                systemInstruction = "Create a 4-6 slide presentation outline based on the documents. Return JSON: { \"slides\": [ { \"title\": \"...\", \"points\": [\"...\", \"...\"] } ] }";
+                prompt = `Context:\n${context}\n\nGenerate slides JSON.`;
+            } else if (type === 'map') {
+                document.getElementById('network-loading').classList.remove('hidden');
+                expectJson = true;
+                systemInstruction = "Extract a knowledge graph from the text. Identify key entities (materials, organizations, concepts) and their relationships. Return JSON: { \"nodes\": [{\"id\": 1, \"label\": \"Entity\"}], \"edges\": [{\"from\": 1, \"to\": 2, \"label\": \"relates to\"}] }. Keep it under 20 nodes for clarity.";
+                prompt = `Context:\n${context}\n\nExtract knowledge graph JSON.`;
+            } else if (type === 'policy') {
+                const policyText = document.getElementById('policy-input').value.trim();
+                if(!policyText) return alert("Enter a policy scenario first.");
+                showLoader('Simulating Policy Impact...');
+                expectJson = true;
+                systemInstruction = "Analyze how the 'New Policy Scenario' impacts the entities/operations described in the context documents. Return JSON: { \"risks\": \"html bullet points\", \"adaptations\": \"html bullet points\", \"opportunities\": \"html bullet points\", \"detailedMarkdown\": \"Full markdown analysis\" }";
+                prompt = `Context:\n${context}\n\nNew Policy Scenario:\n${policyText}\n\nAnalyze impact.`;
             }
 
             try {
-                switch(type) {
-                    case 'explorer':
-                        await runExplorerAgent(contextStr);
-                        break;
-                    case 'slides':
-                        await runSlidesAgent(contextStr);
-                        break;
-                    case 'brief':
-                        await runBriefAgent(contextStr);
-                        break;
-                    case 'map':
-                        await runMapAgent(contextStr);
-                        break;
-                    case 'policy':
-                        const scenario = document.getElementById('policy-scenario-input').value.trim();
-                        if (!scenario) {
-                            alert("Please enter a policy scenario.");
-                            return;
-                        }
-                        await runPolicyAgent(contextStr, scenario);
-                        break;
-                }
-            } catch (error) {
-                console.error(error);
-                alert(`Error generating content: ${error.message}`);
-            } finally {
-                hideToolLoading();
-            }
-        }
+                const result = await callGeminiAPI(prompt, systemInstruction, expectJson);
 
-        // 1. Concept Explorer Agent
-        async function runExplorerAgent(context) {
-            showToolLoading("Extracting Hierarchical Concepts...");
-            const systemPrompt = `You are a knowledge extraction agent. Analyze the provided documents and create a structured, hierarchical ontology of key concepts, materials, and processes mentioned.`;
-            const userPrompt = `${context}\n\nTask: Generate a JSON array representing a hierarchy. Format:
-[ { "title": "Main Category 1", "description": "Brief desc", "children": [ { "title": "Subcategory 1.1", "description": "Brief desc", "children": [] } ] } ]
-Max depth 3. Keep descriptions under 15 words. Return ONLY valid JSON.`;
-
-            const jsonStr = await callGemini(userPrompt, systemPrompt, true);
-            const data = JSON.parse(jsonStr);
-            
-            const container = document.getElementById('explorer-content');
-            container.innerHTML = '';
-            
-            function buildTree(nodes, isRoot = false) {
-                if (!nodes || nodes.length === 0) return '';
-                let html = `<ul class="${isRoot ? 'space-y-3' : 'ml-6 mt-2 space-y-2 border-l border-gray-200 dark:border-slate-700 pl-4'}">`;
-                nodes.forEach(node => {
-                    const hasChildren = node.children && node.children.length > 0;
-                    if (hasChildren) {
-                        html += `
-                            <li>
-                                <details class="group" ${isRoot ? 'open' : ''}>
-                                    <summary class="flex items-center cursor-pointer font-medium text-gray-800 dark:text-gray-200 hover:text-eco-600 dark:hover:text-eco-400 select-none">
-                                        <i class="fa-solid fa-chevron-right text-xs mr-2 transition-transform group-open:rotate-90 text-gray-400"></i>
-                                        <span class="bg-gray-100 dark:bg-slate-800 px-2 py-1 rounded text-sm">${escapeHtml(node.title)}</span>
-                                        ${node.description ? `<span class="ml-3 text-xs font-normal text-gray-500">${escapeHtml(node.description)}</span>` : ''}
-                                    </summary>
-                                    ${buildTree(node.children)}
-                                </details>
-                            </li>`;
-                    } else {
-                        html += `
-                            <li class="flex items-center text-sm text-gray-700 dark:text-gray-300 py-1">
-                                <i class="fa-solid fa-minus text-gray-300 dark:text-slate-600 mr-2 text-xs"></i>
-                                <span class="font-medium">${escapeHtml(node.title)}</span>
-                                ${node.description ? `<span class="ml-2 text-gray-500 dark:text-gray-400 text-xs">- ${escapeHtml(node.description)}</span>` : ''}
-                            </li>`;
-                    }
-                });
-                html += `</ul>`;
-                return html;
-            }
-
-            container.innerHTML = buildTree(data, true);
-        }
-
-        // 2. Slide Deck Agent
-        async function runSlidesAgent(context) {
-            showToolLoading("Designing Slide Deck...");
-            const systemPrompt = `You are an expert presentation designer and sustainability consultant. Create a professional slide deck outline based on the documents. Focus on Data, Opportunities, and Compliance.`;
-            const userPrompt = `${context}\n\nTask: Generate a presentation outline. Return ONLY valid JSON in this format:
-[ { "title": "Slide Title", "type": "title|content|metrics", "content": ["Bullet point 1", "Bullet point 2"] } ]
-Create 5 to 8 slides.`;
-
-            const jsonStr = await callGemini(userPrompt, systemPrompt, true);
-            const slides = JSON.parse(jsonStr);
-            
-            const container = document.getElementById('slides-content');
-            container.innerHTML = '';
-            
-            slides.forEach((slide, index) => {
-                const div = document.createElement('div');
-                div.className = 'bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl p-8 aspect-video shadow-sm flex flex-col relative page-break-inside-avoid';
-                
-                // Slide Number
-                div.innerHTML += `<div class="absolute bottom-4 right-4 text-xs text-gray-400 font-mono">${index + 1}</div>`;
-                
-                // EcoLens branding
-                div.innerHTML += `<div class="absolute top-4 right-4 text-xs text-eco-500 font-bold opacity-50"><i class="fa-solid fa-leaf"></i> EcoLens</div>`;
-
-                if (slide.type === 'title' || index === 0) {
-                    div.classList.add('justify-center', 'items-center', 'text-center', 'bg-gradient-to-br', 'from-eco-50', 'to-white', 'dark:from-slate-800', 'dark:to-slate-900');
-                    div.innerHTML += `
-                        <h2 class="text-3xl font-bold text-gray-800 dark:text-white mb-4">${escapeHtml(slide.title)}</h2>
-                        <div class="h-1 w-16 bg-eco-500 mb-4"></div>
-                        <p class="text-gray-600 dark:text-gray-400">${slide.content ? escapeHtml(slide.content[0]) : ''}</p>
-                    `;
-                } else {
-                    div.innerHTML += `<h3 class="text-xl font-bold text-gray-800 dark:text-white mb-6 border-b border-gray-100 dark:border-slate-800 pb-2">${escapeHtml(slide.title)}</h3>`;
-                    let listHtml = '<ul class="space-y-3 flex-1 text-gray-600 dark:text-gray-300">';
-                    (slide.content || []).forEach(point => {
-                        listHtml += `<li class="flex items-start"><i class="fa-solid fa-caret-right text-eco-500 mt-1 mr-3 text-sm"></i> <span>${escapeHtml(point)}</span></li>`;
+                if (type === 'explorer') {
+                    document.getElementById('explorer-content').innerHTML = marked.parse(result);
+                } else if (type === 'brief') {
+                    document.getElementById('brief-content').innerHTML = marked.parse(result);
+                } else if (type === 'slides') {
+                    const container = document.getElementById('slides-container');
+                    container.innerHTML = '';
+                    result.slides.forEach((slide, i) => {
+                        const liHTML = slide.points.map(p => `<li class="mb-2 pl-4 relative before:content-['•'] before:absolute before:left-0 before:text-eco-500">${p}</li>`).join('');
+                        container.innerHTML += `
+                            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-8 shadow-sm aspect-video flex flex-col justify-center relative overflow-hidden group">
+                                <div class="absolute top-4 right-4 text-gray-300 dark:text-gray-600 font-bold text-xl">${i+1}</div>
+                                <h3 class="text-2xl font-bold mb-6 text-gray-900 dark:text-white border-b pb-4">${slide.title}</h3>
+                                <ul class="text-gray-700 dark:text-gray-300 text-lg flex-1 overflow-y-auto pr-4">${liHTML}</ul>
+                                <div class="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-eco-500 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
+                            </div>
+                        `;
                     });
-                    listHtml += '</ul>';
-                    div.innerHTML += listHtml;
+                } else if (type === 'map') {
+                     initNetwork(result);
+                } else if (type === 'policy') {
+                    document.getElementById('policy-results').classList.remove('hidden');
+                    document.getElementById('policy-risks').innerHTML = `<ul class="list-disc pl-4 space-y-1">${result.risks}</ul>`;
+                    document.getElementById('policy-adapt').innerHTML = `<ul class="list-disc pl-4 space-y-1">${result.adaptations}</ul>`;
+                    document.getElementById('policy-opps').innerHTML = `<ul class="list-disc pl-4 space-y-1">${result.opportunities}</ul>`;
+                    document.getElementById('policy-details').innerHTML = marked.parse(result.detailedMarkdown);
                 }
-                container.appendChild(div);
-            });
 
-            document.getElementById('btn-export-slides').classList.remove('hidden');
-            document.getElementById('btn-export-slides').classList.add('flex');
+            } catch (error) {
+                alert("Generation failed: " + error.message);
+            } finally {
+                hideLoader();
+                if(type === 'map') document.getElementById('network-loading').classList.add('hidden');
+            }
         }
 
-        function exportSlidesPdf() {
-            const element = document.getElementById('slides-content');
-            const opt = {
-                margin:       10,
-                filename:     'EcoLens_SlideDeck.pdf',
-                image:        { type: 'jpeg', quality: 0.98 },
-                html2canvas:  { scale: 2, useCORS: true },
-                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
-            };
-            
-            // Temporarily modify styles for better PDF output
-            const originalClass = element.className;
-            element.className = 'grid grid-cols-1 gap-8'; // Stack them for printing
-            
-            html2pdf().set(opt).from(element).save().then(() => {
-                element.className = originalClass; // Restore grid
-            });
-        }
-
-        // 3. Research Brief Agent
-        async function runBriefAgent(context) {
-            showToolLoading("Synthesizing Research Brief...");
-            const systemPrompt = `You are EcoLens Lead Analyst. Write a comprehensive, professional executive research brief based on the provided documents.`;
-            const userPrompt = `${context}\n\nTask: Generate a Markdown formatted research brief. 
-Include these sections: 
-1. Executive Summary
-2. Material & Waste Analysis (Insight Lens)
-3. Circular Economy Opportunities (Opportunity Lens - list specific feasible products/uses)
-4. Regulatory & Compliance Readiness (Compliance Lens)
-5. Recommended Action Plan.
-Use professional formatting, tables if appropriate, and bold key metrics.`;
-
-            const markdown = await callGemini(userPrompt, systemPrompt, false);
-            const container = document.getElementById('brief-content');
-            container.innerHTML = DOMPurify.sanitize(marked.parse(markdown));
-        }
-
-        // 4. Knowledge Map Agent
-        async function runMapAgent(context) {
-            showToolLoading("Mapping Entities & Relationships...");
-            const systemPrompt = `You are a data ontology extractor. Extract key entities (materials, products, regulations, organizations) and their relationships from the documents to build a network graph.`;
-            const userPrompt = `${context}\n\nTask: Extract a network graph. Limit to the top 20 most important nodes to keep it legible.
-Return ONLY valid JSON in this format:
-{
-  "nodes": [ { "id": 1, "label": "Entity Name", "group": "material|product|regulation" } ],
-  "edges": [ { "from": 1, "to": 2, "label": "relationship description" } ]
-}`;
-
-            const jsonStr = await callGemini(userPrompt, systemPrompt, true);
-            const data = JSON.parse(jsonStr);
-            
-            document.getElementById('map-placeholder').style.display = 'none';
+        // --- Vis Network ---
+        function initNetwork(data) {
             const container = document.getElementById('network-container');
             
-            // Assign colors based on groups
-            const colorMap = {
-                material: { background: '#d1fae5', border: '#10b981', font: {color: '#064e3b'} }, // eco-100, eco-500
-                product: { background: '#e0e7ff', border: '#6366f1', font: {color: '#312e81'} }, // indigo
-                regulation: { background: '#fee2e2', border: '#ef4444', font: {color: '#7f1d1d'} }, // red
-                default: { background: '#f1f5f9', border: '#94a3b8', font: {color: '#1e293b'} } // slate
-            };
-
-            const styledNodes = data.nodes.map(node => {
-                const style = colorMap[node.group] || colorMap.default;
-                return {
-                    ...node,
-                    color: { background: style.background, border: style.border, highlight: { border: '#000' } },
-                    font: style.font,
-                    shape: 'box',
-                    borderWidth: 2,
-                    borderRadius: 8,
-                    margin: 10
+            // Default empty state
+            if(!data || !data.nodes || data.nodes.length === 0) {
+                 data = {
+                    nodes: [
+                        { id: 1, label: 'Document', color: { background: '#22c55e', border: '#16a34a' } },
+                        { id: 2, label: 'Insight', color: { background: '#3b82f6', border: '#2563eb' } },
+                        { id: 3, label: 'Value', color: { background: '#a855f7', border: '#9333ea' } }
+                    ],
+                    edges: [
+                        { from: 1, to: 2, label: 'yields' },
+                        { from: 2, to: 3, label: 'creates' }
+                    ]
                 };
-            });
-
-            const styledEdges = data.edges.map(edge => ({
-                ...edge,
-                font: { size: 10, align: 'middle', color: State.isDarkMode ? '#cbd5e1' : '#64748b', strokeWidth: 0 },
-                color: { color: State.isDarkMode ? '#475569' : '#cbd5e1' },
-                arrows: 'to'
-            }));
-
-            const networkData = { nodes: new vis.DataSet(styledNodes), edges: new vis.DataSet(styledEdges) };
-            const options = {
-                physics: { stabilization: true, barnesHut: { springLength: 200 } },
-                interaction: { hover: true, tooltipDelay: 200 }
-            };
-
-            if (State.networkInstance) {
-                State.networkInstance.destroy();
-            }
-            State.networkInstance = new vis.Network(container, networkData, options);
-        }
-
-        // 5. Policy Impact Agent
-        async function runPolicyAgent(context, scenario) {
-            showToolLoading("Simulating Policy Impact...");
-            const systemPrompt = `You are a Regulatory Impact Analyst within EcoLens. Evaluate hypothetical policy scenarios against the user's data to predict operational, compliance, and economic impacts.`;
-            let userPrompt = `Hypothetical Policy Scenario: "${scenario}"\n\n`;
-            if (context) {
-                userPrompt += `Analyze this scenario against the following organizational data:\n${context}\n\n`;
             } else {
-                userPrompt += `Analyze this scenario generally, as no specific documents were provided.\n\n`;
+                // Apply styling to generated nodes
+                data.nodes = data.nodes.map(n => ({
+                    ...n,
+                    shape: 'box',
+                    margin: 10,
+                    font: { color: state.isDark ? '#fff' : '#1e293b' },
+                    color: {
+                        background: state.isDark ? '#1e293b' : '#f8fafc',
+                        border: '#22c55e',
+                        highlight: { background: '#dcfce7', border: '#16a34a' }
+                    }
+                }));
+                data.edges = data.edges.map(e => ({
+                    ...e,
+                    font: { size: 10, align: 'middle', color: state.isDark ? '#94a3b8' : '#64748b' },
+                    color: { color: '#cbd5e1' },
+                    arrows: 'to'
+                }));
             }
-            userPrompt += `Task: Generate an impact report in Markdown format. Include:
-1. Scenario Overview
-2. Direct Impact on Materials/Waste Streams
-3. Compliance Risks & Requirements
-4. Strategic Opportunities (How to pivot or benefit)
-Use clear headings and bullet points.`;
 
-            const markdown = await callGemini(userPrompt, systemPrompt, false);
-            const container = document.getElementById('policy-content');
-            container.innerHTML = DOMPurify.sanitize(marked.parse(markdown));
+            const options = {
+                interaction: { hover: true, zoomView: true },
+                physics: {
+                    stabilization: true,
+                    barnesHut: { gravitationalConstant: -2000, springConstant: 0.04 }
+                }
+            };
+            
+            if(state.networkInstance) state.networkInstance.destroy();
+            state.networkInstance = new vis.Network(container, data, options);
         }
 
-        // Initialize empty state checks
-        renderDocumentList();
+        // --- Chatbot Implementation ---
+        async function handleSendChat() {
+            const msg = elements.chatInput.value.trim();
+            if (!msg) return;
+
+            // Add User message to UI
+            appendChatMessage(msg, 'user');
+            elements.chatInput.value = '';
+            elements.sendBtn.disabled = true;
+
+            const context = getSelectedContext();
+            let prompt = "";
+            
+            if (!context) {
+                appendChatMessage("I need some context. Please upload and select documents on the left sidebar first.", 'bot');
+                elements.sendBtn.disabled = false;
+                return;
+            }
+
+            prompt = `Context from selected documents:\n${context}\n\nUser Query: ${msg}\n\nInstruction: Answer the query using ONLY the provided context. You MUST cite your sources at the end of relevant sentences using the format [Filename, Page X]. If the answer is not in the context, say so gracefully.`;
+
+            // Add loading placeholder
+            const loadingId = 'msg-' + Date.now();
+            appendChatMessage('<i class="ph ph-dots-three text-xl animate-pulse"></i> Analyzing documents...', 'bot', loadingId);
+
+            try {
+                const response = await callGeminiAPI(prompt, "You are EcoLens Chat. A helpful assistant answering questions based strictly on uploaded documents. Always cite sources as requested.");
+                
+                // Replace loading with markdown parsed response
+                const loadingElement = document.getElementById(loadingId);
+                if (loadingElement) {
+                     loadingElement.innerHTML = marked.parse(response);
+                     // Simple styling fix for marked output in chat
+                     loadingElement.querySelectorAll('p').forEach(p => p.classList.add('mb-2', 'last:mb-0'));
+                     loadingElement.querySelectorAll('ul').forEach(ul => ul.classList.add('list-disc', 'pl-4', 'mb-2'));
+                     
+                     // Highlight citations
+                     loadingElement.innerHTML = loadingElement.innerHTML.replace(/\[([^\]]+,\s*Page\s*\d+)\]/g, '<span class="text-[10px] bg-eco-100 dark:bg-eco-900/50 text-eco-700 dark:text-eco-400 px-1 rounded ml-1 font-mono border border-eco-200 dark:border-eco-800">[$1]</span>');
+                }
+
+            } catch (error) {
+                const loadingElement = document.getElementById(loadingId);
+                if (loadingElement) {
+                     loadingElement.innerHTML = `<span class="text-red-500">Error: ${error.message}. Check API key.</span>`;
+                }
+            } finally {
+                elements.sendBtn.disabled = false;
+                elements.chatInput.focus();
+                elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+            }
+        }
+
+        function appendChatMessage(htmlContent, sender, id = null) {
+            const div = document.createElement('div');
+            div.className = "flex gap-3 animate-fade-in";
+            
+            if (sender === 'user') {
+                div.classList.add('flex-row-reverse');
+                div.innerHTML = `
+                    <div class="w-6 h-6 rounded bg-gray-200 dark:bg-gray-700 flex items-center justify-center shrink-0 mt-1">
+                        <i class="ph-fill ph-user text-gray-500 dark:text-gray-300 text-xs"></i>
+                    </div>
+                    <div class="bg-blue-500 text-white p-3 rounded-xl rounded-tr-none shadow-sm max-w-[85%] text-sm">
+                        ${htmlContent}
+                    </div>
+                `;
+            } else {
+                div.innerHTML = `
+                    <div class="w-6 h-6 rounded bg-blue-100 dark:bg-blue-900 flex items-center justify-center shrink-0 mt-1">
+                        <i class="ph-fill ph-robot text-blue-600 dark:text-blue-400 text-xs"></i>
+                    </div>
+                    <div ${id ? `id="${id}"` : ''} class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-3 rounded-xl rounded-tl-none shadow-sm text-gray-800 dark:text-gray-200 max-w-[90%] text-sm">
+                        ${htmlContent}
+                    </div>
+                `;
+            }
+            elements.chatMessages.appendChild(div);
+            elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+        }
+
+        // --- Utilities ---
+        function showLoader(text) {
+            elements.loaderText.textContent = text;
+            elements.globalLoader.style.display = 'flex';
+        }
+        function hideLoader() {
+            elements.globalLoader.style.display = 'none';
+        }
+
+        // Run Init
+        document.addEventListener('DOMContentLoaded', init);
 
     </script>
 </body>
